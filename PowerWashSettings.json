@@ -1,0 +1,61 @@
+{
+	"CheckIntegrity": true,
+	
+	"DisableAutoUpdate": true,   "<-- Requires Pro or Enterprise/Edu": {},
+	"DisableTelemetry": true,
+	
+	"DisableHpet": true,
+	"MultimediaResponsiveness": true,
+	"PowerSettingsMaxPerformance": true,
+	"HwGpuScheduling": true,
+	"NetworkResponsiveness": true,
+	
+	"DisableCortana": true,
+	"DisableConsumerFeatures": true,   "<-- Requires Enterprise/Edu": {},
+	"DisablePreinstalled": true,   "<-- Requires Enterprise/Edu": {},
+	"RemovePreinstalled": true,
+	"RemovePreinstalledList": [
+		"Microsoft.SkypeApp",
+		"Microsoft.People",
+		"Microsoft.WindowsCommunicationsApps",
+		"Microsoft.YourPhone",
+		"Microsoft.XboxApp",
+		"Microsoft.Messaging",
+		"Microsoft.OneConnect",
+		"Microsoft.WindowsSoundRecorder",
+		"Microsoft.BingWeather",
+		"Microsoft.Advertising.Xaml",
+		"Microsoft.Wallet"
+	],   "<-- Some packages like Edge and ContentDeliveryManager can't be uninstalled this way": {},
+	"RemoveEdge": false,   "<-- Still in alpha": {},
+	
+	"InstallGpEdit": true,   "<-- Automatically skipped if edition is not Home": {},
+	"InstallWinget": true,
+	"InstallConfigured": true,   "<-- Installs applications below using Winget": {},
+	"InstallConfiguredList": [
+		"Notepad++.Notepad++",
+		"Microsoft.VisualStudioCode",
+		"Microsoft.WindowsTerminal",
+		"Microsoft.PowerToys",
+		"Microsoft.Sysinternals.ProcessMonitor",
+		"Git.Git",
+		"Gyan.FFmpeg"
+	],   "<-- Passes these as arguments to `winget install`. REQUIRES WINGET": {},
+	
+	"DisableRealtimeMonitoringCAUTION": false,   "<-- EXTRA CAUTION": {},
+	"DisableAllDefenderCAUTIONCAUTION": false,   "<-- EXTRA CAUTION": {},
+	"DefenderScanOnlyWhenIdle": true,
+	"DefenderScanLowPriority": true,
+	
+	"DisableFastStartup": true,
+	"DisableStartupDelay": true,
+	
+	"EnableDriverMsi": true,
+	"EnableDriverPrio": true,
+	
+	"ShowSecondsInTaskbar": true,
+	"ShowRunAsDifferentUser": true,
+	"ShowHiddenExplorer": true,
+	
+	"AutoRestart": true
+}
