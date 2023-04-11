@@ -57,5 +57,5 @@
 	"ShowRunAsDifferentUser": true,
 	"ShowHiddenExplorer": true,
 	
-	"AutoRestart": true
+	"AutoRestart": false
 }
