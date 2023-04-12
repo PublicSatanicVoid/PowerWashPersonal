@@ -120,6 +120,11 @@ $global:config_map=(Get-Content -Raw ".\PowerWashSettings.json" | ConvertFrom-Js
 $noinstall="/noinstalls" -in $args
 $noscan="/noscans" -in $args
 $autorestart="/autorestart" -in $args
+$is_unattend="/is-unattend" -in $args
+if ($is_unattend) {
+	Add-Type -AssemblyName System.Windows.Forms
+	[System.Windows.Forms.MessageBox]::Show('Applying custom Windows configuration. Do not restart until notified that this has completed.', 'PowerWash Setup', 'OK', [System.Windows.Forms.MessageBoxIcon]::Information)
+}
 
 # Check Windows edition; some editions don't support certain features
 $edition = (Get-WindowsEdition -online).Edition
@@ -615,6 +620,11 @@ if ($av_product -ne "Windows Defender") {
 }
 
 ""
+
+if ($is_unattend) {
+	Add-Type -AssemblyName System.Windows.Forms
+	[System.Windows.Forms.MessageBox]::Show('Custom Windows configuration has been successfully applied. You may now restart.', 'PowerWash Setup', 'OK', [System.Windows.Forms.MessageBoxIcon]::Information)
+}
 
 "PowerWash complete, a restart is recommended."
 if ($autorestart -or ($global:do_config -and $global:config_map.AutoRestart)) {
