@@ -122,6 +122,7 @@ $noscan="/noscans" -in $args
 $autorestart="/autorestart" -in $args
 $is_unattend="/is-unattend" -in $args
 if ($is_unattend) {
+	"Unattended setup detected"
 	Add-Type -AssemblyName System.Windows.Forms
 	[System.Windows.Forms.MessageBox]::Show('Applying custom Windows configuration. Do not restart until notified that this has completed.', 'PowerWash Setup', 'OK', [System.Windows.Forms.MessageBoxIcon]::Information)
 }
