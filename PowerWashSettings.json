@@ -30,8 +30,8 @@
 	"RemoveEdge": false,   "<-- Still in alpha": {},
 	
 	"InstallGpEdit": true,   "<-- Automatically skipped if edition is not Home": {},
-	"InstallWinget": true,
-	"InstallConfigured": true,   "<-- Installs applications below using Winget": {},
+	"InstallWinget": false,
+	"InstallConfigured": false,   "<-- Installs applications below using Winget": {},
 	"InstallConfiguredList": [
 		"Notepad++.Notepad++",
 		"Microsoft.VisualStudioCode",
@@ -56,6 +56,7 @@
 	"ShowSecondsInTaskbar": true,
 	"ShowRunAsDifferentUser": true,
 	"ShowHiddenExplorer": true,
+	"CleanupTaskbar": true,
 	
 	"AutoRestart": false
 }

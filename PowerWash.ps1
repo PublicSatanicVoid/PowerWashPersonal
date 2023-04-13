@@ -116,7 +116,11 @@ if ("/stats" -in $args) {
 $global:do_all="/all" -in $args
 $global:do_all_auto="/auto" -in $args
 $global:do_config="/config" -in $args
-$global:config_map=(Get-Content -Raw ".\PowerWashSettings.json" | ConvertFrom-Json)
+$global:config_map=If ($do_config) {
+	(Get-Content -Raw ".\PowerWashSettings.json" | ConvertFrom-Json)
+} Else {
+	@{}
+}
 $noinstall="/noinstalls" -in $args
 $noscan="/noscans" -in $args
 $autorestart="/autorestart" -in $args
@@ -222,6 +226,11 @@ function Confirm ($Prompt, $Auto=$false, $ConfigKey=$null) {
 		return $global:config_map.$ConfigKey
 	}
 	return (Read-Host "$Prompt y/n") -eq "y"
+}
+
+function UnpinApp($appname) {
+	# https://learn.microsoft.com/en-us/answers/questions/214599/unpin-icons-from-taskbar-in-windows-10-20h2
+	((New-Object -Com Shell.Application).NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}').Items() | ?{$_.Name -eq $appname}).Verbs() | ?{$_.Name.replace('&', '') -match 'Unpin from taskbar'} | %{$_.DoIt()}
 }
 
 # Check system file integrity
@@ -609,6 +618,18 @@ if ($show_explorer) {
 	RegistryPut "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Key "Hidden" -Value 1 -ValueType "DWord"
 	RegistryPut "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Key "HideFileExt" -Value 0 -ValueType "DWord"
 	"Will now show file extensions and hidden files in Explorer"
+}
+
+$customize_taskbar=Confirm "Clean up taskbar? (Recommended for a cleaner out-of-box Windows experience)" -Auto $false -ConfigKey "CleanupTaskbar"
+if ($customize_taskbar) {
+	UnpinApp("Microsoft Store")
+	UnpinApp("Microsoft Edge")
+	RegistryPut "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Key "TraySearchBoxVisible" -Value 0 -ValueType "DWord"
+	RegistryPut "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Key "SearchboxTaskbarMode" -Value 1 -ValueType "DWord"
+	RegistryPut "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds" -Key "EnableFeeds" -Value 0 -ValueType "DWord"
+	taskkill /f /im explorer.exe
+	start explorer.exe
+	"Taskbar cleaned up"
 }
 
 # Checks for third-party antivirus products (generally not needed)
