@@ -15,17 +15,21 @@
 	"DisablePreinstalled": true,   "<-- Requires Enterprise/Edu": {},
 	"RemovePreinstalled": true,
 	"RemovePreinstalledList": [
-		"Microsoft.SkypeApp",
-		"Microsoft.People",
-		"Microsoft.WindowsCommunicationsApps",
-		"Microsoft.YourPhone",
-		"Microsoft.XboxApp",
+		"Microsoft.549981C3F5F10",
+		"Microsoft.Advertising.Xaml",
+		"Microsoft.BingNews",
+		"Microsoft.BingWeather",
 		"Microsoft.Messaging",
 		"Microsoft.OneConnect",
+		"Microsoft.People",
+		"Microsoft.SkypeApp",
+		"Microsoft.Wallet",
+		"Microsoft.WindowsCommunicationsApps",
+		"Microsoft.WindowsFeedbackHub",
 		"Microsoft.WindowsSoundRecorder",
-		"Microsoft.BingWeather",
-		"Microsoft.Advertising.Xaml",
-		"Microsoft.Wallet"
+		"Microsoft.XboxApp",
+		"Microsoft.YourPhone",
+		"MicrosoftTeams"
 	],   "<-- Some packages like Edge and ContentDeliveryManager can't be uninstalled this way": {},
 	"RemoveEdge": false,   "<-- Still in alpha": {},
 	
@@ -34,12 +38,16 @@
 	"InstallConfigured": true,   "<-- Installs applications below using Winget": {},
 	"InstallConfiguredList": [
 		"Notepad++.Notepad++",
-		"Microsoft.VisualStudioCode",
 		"Microsoft.WindowsTerminal",
+		"Gyan.FFmpeg",
+		"Git.Git",
 		"Microsoft.PowerToys",
 		"Microsoft.Sysinternals.ProcessMonitor",
-		"Git.Git",
-		"Gyan.FFmpeg"
+		"Microsoft.VisualStudioCode",
+		"7zip.7zip",
+		"Discord.Discord",
+		"Google.Chrome",
+		"Valve.Steam"
 	],   "<-- Passes these as arguments to `winget install`. REQUIRES WINGET": {},
 	
 	"DisableRealtimeMonitoringCAUTION": false,   "<-- EXTRA CAUTION": {},
