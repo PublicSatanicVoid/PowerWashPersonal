@@ -1,32 +1,67 @@
+<sup>[← Back to home](https://github.com/UniverseCraft/WindowsPowerWash/tree/main/README.md)</sup>
+
 ## How It Works
 The default Windows installation has to cater to a very wide variety of users, and generally makes tradeoffs that sacrifice some degree of performance and responsiveness in exchange for power management, data collection, etc.
 
-PowerWash modifies various aspects of your Windows installation. Instead of compromising performance for power efficiency, it configures your system to compromise power efficiency for low latency and high performance. (Note: Many of the changes intentionally do not apply when on battery)
+PowerWash modifies various aspects of your Windows installation. It configures your system to aggressively choose maximum performance and minimum latency over power saving. (Note: Many of the changes intentionally do not apply when on battery). It also removes bloatware and unwanted default programs, and generally cleans up the out-of-box experience. It does this through a combination of registry changes, application package removals, PowerShell cmdlets, and more.
 
-Current features include:
-- Running Microsoft's built-in [system file integrity checks](https://support.microsoft.com/en-us/topic/use-the-system-file-checker-tool-to-repair-missing-or-corrupted-system-files-79aa86cb-ca52-166a-92a3-966e85d4094e) to repair any corrupted system files
-- Installing [Group Policy editor](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/dn265982(v=ws.11)), which presents a straightforward and well-documented interface to make system changes without manually editing the registry. Group Policy editor is a Microsoft product but does not come installed by default on Home editions of Windows.
-- Disabling the [high precision event timer](https://en.wikipedia.org/wiki/High_Precision_Event_Timer) (may improve DPC latency on some systems)
-- Disabling automatic Windows updates (background updates can consume resources and automatic install/restart is often not wanted) (Note: These can't fully be disabled on Home editions without disabling updates completely)
-- Disabling Windows telemetry (telemetry can waste resources)
-- Applying more aggressive [multimedia settings](https://learn.microsoft.com/en-us/windows/win32/procthread/multimedia-class-scheduler-service) (can improve performance of pro audio tasks)
-- Enabling Microsoft's ["Ultimate" performance power plan](https://social.technet.microsoft.com/wiki/contents/articles/52059.windows-10-the-ultimate-performance-power-policy.aspx) along with additional [highly aggressive performance settings](https://learn.microsoft.com/en-us/windows-server/administration/performance-tuning/hardware/power/power-performance-tuning)
-- Enabling [hardware-accelerated GPU scheduling](https://devblogs.microsoft.com/directx/hardware-accelerated-gpu-scheduling/) (can reduce graphics latency)
-- Disabling network adapter packet coalescing (can improve DPC latency for `ndis.sys`/`tcpip.sys`)
-- Disabling Cortana
-- Disabling [Windows consumer features](https://admx.help/?Category=Windows_10_2016&Policy=Microsoft.Policies.CloudContent::DisableWindowsConsumerFeatures) (e.g. third-party suggestions) (Works on Enterprise/Education only)
-- Disabling and/or removing preinstalled applications
-- Only running Windows Defender scans when the computer is idle; reducing priority of Defender tasks; optionally disabling Defender real-time protection
-- Disabling Windows Defender Real-Time Protection, or disabling Windows Defender entirely (antivirus can reduce performance) (CAUTION: This WILL make your device less secure. This is also a highly experimental feature! All features here are use-at-your-own-risk, but this one especially!)
-- Disabling [Fast Startup](https://www.makeuseof.com/what-is-windows-fast-startup-why-disable-it) (can fix problems with some devices since Fast Startup skips some initialization)
-- Enabling [message-signaled interrupts](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/introduction-to-message-signaled-interrupts) on all devices that support them (can improve interrupt latency)
-- Prioritizing interrupts from devices like GPU and PCIe controller (may improve DPC/ISR latency)
-- Checking for IRQ conflicts (these cannot be resolved automatically, though)
-- Checking if a third-party antivirus is installed (Windows Defender is faster and better - third party antivirus must be uninstalled manually, though)
+## Feature Support
 
-There are some additional "nice-to-have"s that aren't regularly available through the Windows Settings UI, like showing seconds in the taskbar clock, showing "Run as different user" in the Start menu, and showing file extensions and hidden items in Explorer. This script can optionally also install [Winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/) and a configurable list of applications available through it.
+Some editions of Windows do not have the necessary components to support certain PowerWash features. PowerWash does not impose any artificial limitations and the author continues to look for ways around Microsoft's. All features listed below are optional and configurable using the provided [`PowerWashSettings.json`](https://github.com/UniverseCraft/WindowsPowerWash/tree/main/PowerWashSettings.json). (See [the documentation](https://github.com/UniverseCraft/WindowsPowerWash/tree/main/docs/USAGE_CONFIG.md)).
 
-All of the above features are configurable using the provided `PowerWashSettings.json`. To apply the settings in that file, run PowerWash with the `/config` flag. Otherwise, those settings will not be used!
+### Scans and checks
+
+| Feature | Works on Windows Home | Works on Windows Pro | Works on Windows Enterprise/Education | Description |
+| ------- | :----: | :---: | :--------------------: | ----------- |
+| System integrity checks | ✅ | ✅ | ✅ | Runs Microsoft's built-in [system file integrity checks](https://support.microsoft.com/en-us/topic/use-the-system-file-checker-tool-to-repair-missing-or-corrupted-system-files-79aa86cb-ca52-166a-92a3-966e85d4094e) to repair any corrupted system files |
+| Check for IRQ conflicts | ✅ | ✅ | ✅ | Sharing interrupt request lines among multiple devices can degrade performance. This cannot be fixed from within the software. | 
+| Warn if third-party antivirus found | ✅ | ✅ | ✅ | Windows Defender is generally faster and better; third-party antivirus software can slow the system down substantially - must be uninstalled manually, though |
+
+### System Configuration - Performance
+
+| Feature | Works on Windows Home | Works on Windows Pro | Works on Windows Enterprise/Education | Description |
+| ------- | :----: | :---: | :--------------------: | ----------- |
+| Disable HPET | ✅ | ✅ | ✅ | Disabling the [high precision event timer](https://en.wikipedia.org/wiki/High_Precision_Event_Timer) may improve DPC latency on some systems |
+| Aggressive multimedia settings | ✅ | ✅ | ✅ | Applying more aggressive [multimedia settings](https://learn.microsoft.com/en-us/windows/win32/procthread/multimedia-class-scheduler-service) can improve performance of pro audio tasks |
+| "Ultimate" performance power plan | ✅ | ✅ | ✅ | Enables Microsoft's ["Ultimate" performance power plan](https://social.technet.microsoft.com/wiki/contents/articles/52059.windows-10-the-ultimate-performance-power-policy.aspx) along with additional [highly aggressive performance settings](https://learn.microsoft.com/en-us/windows-server/administration/performance-tuning/hardware/power/power-performance-tuning) |
+| Accelerated GPU scheduling | ✅ | ✅ | ✅ | Enabling [hardware-accelerated GPU scheduling](https://devblogs.microsoft.com/directx/hardware-accelerated-gpu-scheduling/) can reduce graphics latency |
+| Aggressive network adapter settings | ✅ | ✅ | ✅ | Disabling network adapter packet coalescing and similar options can improve DPC latency for `ndis.sys`/`tcpip.sys` |
+| Disable Fast Startup | ✅ | ✅ | ✅ | Disabling [Fast Startup](https://www.makeuseof.com/what-is-windows-fast-startup-why-disable-it) can fix problems with some devices since Fast Startup skips some initialization |
+| Enable message-signaled interrupts | ✅ | ✅ | ✅ | Enabling [message-signaled interrupts](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/introduction-to-message-signaled-interrupts) on all devices that support them can improve interrupt latency |
+| Prioritize GPU and PCIe controller | ✅ | ✅ | ✅ | May improve DPC/ISR latency for tasks where high regularity is preferred |
+| Disable Windows telemetry | ◑ | ◕ | ✅ | Home edition can disable some telemetry; Pro edition can disable most telemetry; Enterprise/Education can disable all telemetry |
+| Disable automatic Windows updates | ❌ | ✅ | ✅ | Background updates can unexpectedly consume resources and automatic install/restart is typically not wanted. | 
+| Disable all Windows updates | ✅ | ✅ | ✅ | Completely disables the Windows Update feature, disabling both automatic and manual updates. |
+| Toggle Windows updates | ✅ | ✅ | ✅ | Adds a script to your desktop to toggle the Windows Update feature on/off. **This is the best compromise for Home editions** |
+| Disable Windows consumer features | ❌ | ❌ | ✅ | Disables [Windows consumer features](https://admx.help/?Category=Windows_10_2016&Policy=Microsoft.Policies.CloudContent::DisableWindowsConsumerFeatures) (e.g. third-party suggestions) |
+| Throttle "Antimalware Service Executable" | ✅ | ✅ | ✅ | Configures Windows Defender to only run scans when the computer is idle; reduces priority of Defender tasks and limits their CPU usage |
+| Disable Defender Real-Time Protection | ⚠️ | ⚠️ | ⚠️ | CAUTION: This will make your device less secure. Requires Tamper Protection to be disabled. Not recommended and still experimental. |
+| Disable Defender entirely | ⚠️ | ⚠️ | ⚠️ | CAUTION: This will make your device less secure. Requires Tamper Protection to be disabled. Not recommended and still experimental. |
+
+### System Configuration - Usability
+
+| Feature | Works on Windows Home | Works on Windows Pro | Works on Windows Enterprise/Education | Description |
+| ------- | :----: | :---: | :--------------------: | ----------- |
+| Show seconds in taskbar clock | ✅ | ✅ | ✅ | |
+| Show "Run as different user" in Start menu | ✅ | ✅ | ✅ | |
+| Show file extensions and hidden items in Explorer | ✅ | ✅ | ✅ | |
+| Clean up default taskbar | ✅ | ✅ | ✅ | Mainly geared toward fresh installs of Windows |
+
+### Bloatware Removal
+
+| Feature | Works on Windows Home | Works on Windows Pro | Works on Windows Enterprise/Education | Description |
+| ------- | :----: | :---: | :--------------------: | ----------- |
+| Disable/uninstall Cortana | ✅ | ✅| ✅ | Most people find Cortana a nuisance |
+| Remove preinstalled applications | ✅ | ✅ | ✅ | Removes Skype, Teams, Xbox, News/Weather, Solitaire Collection, etc. [This list is configurable!](https://github.com/UniverseCraft/WindowsPowerWash/tree/main/docs/USAGE_CONFIG.md) |
+| Remove Microsoft Edge | ◕ | ◕ | ◕ | Removes the Edge program itself, but at the time of writing, some traces will remain. |
+
+### Software Installation
+
+| Feature | Works on Windows Home | Works on Windows Pro | Works on Windows Enterprise/Education | Description |
+| ------- | :----: | :---: | :--------------------: | ----------- |
+| Install Group Policy Editor | ✅ | N/A | N/A | Installs [Group Policy editor](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/dn265982(v=ws.11)), which presents a straightforward and well-documented interface to make system changes without manually editing the registry. Group Policy editor is a Microsoft product but does not come installed by default on Home editions of Windows. |
+| Install Winget | ✅ | ✅ | ✅ | See [https://learn.microsoft.com/en-us/windows/package-manager/winget/](https://learn.microsoft.com/en-us/windows/package-manager/winget/) |
+| Install free utilities and replacements for Microsoft bloatware | ✅ | ✅ | ✅ | [This list is configurable!](https://github.com/UniverseCraft/WindowsPowerWash/tree/main/docs/USAGE_CONFIG.md) |
 
 ## Suggestions and Tips
 - I recommend you use programs like [LatencyMon](https://www.resplendence.com/latencymon) and [WhySoSlow](https://www.resplendence.com/whysoslow) to benchmark your system before and after running PowerWash and any other optimizations.
@@ -36,6 +71,7 @@ All of the above features are configurable using the provided `PowerWashSettings
 - Using SSD instead of HDD, and NVMe instead of SATA, can drastically improve system responsiveness and application load times, though likely won't help with most causes of high interrupt latency.
 - Make sure all drivers are up to date. When installing or reinstalling, __perform clean installs where possible__.
 - Always back up your system before running PowerWash or making any other system configuration changes.
+- After installing a Windows update, you may need to re-run PowerWash as updates have been known to spontaneously re-enable certain features.
 - Obviously, all of this is "use at your own risk"
 
 ## Special Thank-Yous
