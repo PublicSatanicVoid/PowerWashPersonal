@@ -94,6 +94,8 @@ Debloat:
     - Microsoft.Windows.WordPad
     #- Browser.InternetExplorer # Recommended to keep. Removing will break eg URL shortcuts.
 
+  RemovePhantom: false
+
   # WARNING: EXPERIMENTAL
   # Removes Microsoft Edge. Currently, some traces will remain, but the program itself will
   # at least be gone.
