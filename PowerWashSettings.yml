@@ -1,3 +1,6 @@
+# PowerWash settings
+# https://github.com/UniverseCraft/WindowsPowerWash/blob/main/README.md
+
 # Settings for Windows unattended install.
 # Resources:
 # - https://github.com/UniverseCraft/WindowsPowerWash/blob/main/docs/USAGE_DEPLOYMENT.md
@@ -86,6 +89,7 @@ Debloat:
     - Microsoft.YourPhone
     - MicrosoftTeams
     - RivetNetworks.KillerControlCenter
+    # Cannot remove Edge this way. See "RemoveEdge" config value below instead.
 
   # Will remove the below list of Windows capabilities/features
   RemoveWindowsCapabilities: true
@@ -94,10 +98,15 @@ Debloat:
     - Microsoft.Windows.WordPad
     #- Browser.InternetExplorer # Recommended to keep. Removing will break eg URL shortcuts.
 
+  # Removes phantom programs, i.e. programs listed in the registry but which
+  # do not actually exist.
+  RemovePhantom: true
+
   # WARNING: EXPERIMENTAL
   # Removes Microsoft Edge. Currently, some traces will remain, but the program itself will
   # at least be gone.
   RemoveEdge: false # EXPERIMENTAL
+  RemoveEdge_ExtraTraces: false # EXPERIMENTAL
 
 # Settings pertaining to Windows Update
 WindowsUpdate:

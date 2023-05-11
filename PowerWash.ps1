@@ -9,6 +9,26 @@
 # USE AT YOUR OWN RISK. BACKUP SYSTEM BEFORE USING.
 #
 
+
+$development_computers = @("DESKTOP-8146PKJ", "DESKTOP-OIDHB0U")
+$hostname = hostname
+$global:sys_account_debug_log = "C:\PowerWashSysActionsDbg.log"
+$global:is_debug = ($hostname -in $development_computers) -and $true
+if ($global:is_debug) {
+    "POWERWASH DEBUG MODE IS ON"
+    ""
+}
+
+# $SQLITE_INSTALL_LOCATION = "C:\Program Files\SQLiteLibraries"
+
+""
+"IMPORTANT NOTICE: It is recommended to restart before running PowerWash, to minimize the chance that certain system files will be in use by other programs. This is especially important if you are trying to remove Edge."
+""
+"IMPORTANT NOTICE: It is recommended to create a system restore point before running PowerWash. The author of PowerWash takes no responsibility for its effects on the user's system; see"
+"    https://github.com/UniverseCraft/WindowsPowerWash/blob/main/LICENSE"
+"for more details."
+""
+
 ### USAGE INFORMATION ###
 if ("/?" -in $args) {
     ".\PowerWash.ps1 [/all | /auto | /config | /stats | /warnconfig] [/noinstalls] [/noscans] [/autorestart]"
@@ -25,18 +45,28 @@ if ("/?" -in $args) {
 
 
 "Loading dependencies..."
-
 "- NuGet package manager"
 if ("NuGet" -notin (Get-PackageProvider | Select-Object Name).Name) {
     Install-PackageProvider -Name NuGet -Force | Out-Null
     "  - Installed NuGet package manager"
 }
-
 "- powershell-yaml module"
-if ("powershell-yaml" -notin (Get-Module | Select-Object Name).Name) {
+Import-Module powershell-yaml 2>$null | Out-Null
+if (-not $?) {
     Install-Module -Name powershell-yaml -Force
     " - Installed powershell-yaml module"
 }
+"- sqlite3"
+Get-Command sqlite3 2>$null | Out-Null
+if (-not $?) {
+    $has_sqlite = $false
+    "  - Could not find sqlite3 installation. Will install it automatically if needed."
+}
+else {
+    $has_sqlite = $true
+    $sqlite3_cmd = (Get-Command sqlite3).Source
+}
+
 ""
 
 
@@ -77,14 +107,14 @@ if ("/warnconfig" -in $args) {
     "==Removals=="
     if ($global:config_map.Defender.DisableRealtimeMonitoringCAUTION) {
         if ($global:config_map.Defender.DisableAllDefenderCAUTIONCAUTION) {
-            "* WARNING: Configured settings will disable Windows Defender entirely."
+            "* WARNING: Configured settings will disable Windows Defender entirely. (EXPERIMENTAL)"
         }
         else {
-            "* WARNING: Configured settings will disable Windows Defender realtime monitoring."
+            "* WARNING: Configured settings will disable Windows Defender realtime monitoring. (EXPERIMENTAL)"
         }
     }
     if ($global:config_map.Debloat.RemoveEdge) {
-        "* Will remove Microsoft Edge"
+        "* Will remove Microsoft Edge (EXPERIMENTAL)"
     }
     if ($global:config_map.Debloat.RemovePreinstalled) {
         "* Will remove the following preinstalled apps:"
@@ -97,6 +127,9 @@ if ("/warnconfig" -in $args) {
         foreach ($cap in $global:config_map.Debloat.RemoveWindowsCapabilitiesList) {
             " - $app"
         }
+    }
+    if ($global:config_map.Debloat.RemovePhantom) {
+        "* Will remove phantom applications"
     }
     "==Installs=="
     if ($global:config_map.Install.InstallGpEdit) {
@@ -138,6 +171,7 @@ $global:feature_verbs = @{
     "Debloat.DisablePreinstalled"                  = "Disabling preinstalled apps from Microsoft and OEMs";
     "Debloat.RemovePreinstalled"                   = "Removing configured list of preinstalled apps";
     "Debloat.RemoveWindowsCapabilities"            = "Removing configured list of Windows capabilities";
+    "Debloat.RemovePhantom"                        = "Removing phantom applications";
     "Debloat.RemoveEdge"                           = "Removing Microsoft Edge";
     "WindowsUpdate.DisableAutoUpdate"              = "Disabling automatic Windows updates";
     "WindowsUpdate.DisableAllUpdate"               = "Disabling Windows Update completely";
@@ -157,6 +191,9 @@ $global:feature_verbs = @{
     "Scans.CheckIntegrity"                         = "Running system file integrity checks";
     "Scans.CheckIRQ"                               = "Checking for IRQ conflicts"
 }
+
+$SID = (Get-LocalUser -Name $env:USERNAME).Sid.Value
+"User SID: $SID"
 
 
 ### REGISTRY KEY DEFINITIONS ###
@@ -187,26 +224,23 @@ $RK_MMCSS_ProAudio = "$RK_MMCSS\Tasks\Pro Audio"
 $RK_Uninst = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
 $RK_Uninst_Edge = "$RK_Uninst\Microsoft Edge"
 
-
-
-
-
-
-# Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\SecurityManager\CapAuthz\ApplicationsEx\Microsoft.MicrosoftEdge_44.19041.1266.0_neutral__8wekyb3d8bbwe
-# Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\SecurityManager\CapAuthz\ApplicationsEx\Microsoft.MicrosoftEdgeDevToolsClient_1000.19041.1023.0_neutral_neutral_8wekyb3d8bbwe
-# Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe
-# Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Config\Microsoft.MicrosoftEdge_8wekyb3d8bbwe
-# Computer\HKEY_LOCAL_MACHINE\SYSTEM\Setup\Upgrade\Appx\DownlevelGather\AppxAllUserStore\Config\Microsoft.MicrosoftEdge_8wekyb3d8bbwe
-# Computer\HKEY_LOCAL_MACHINE\SYSTEM\Setup\Upgrade\Appx\DownlevelGather\AppxAllUserStore\InboxApplications\Microsoft.MicrosoftEdge_44.18362.1533.0_neutral__8wekyb3d8bbwe
-# Computer\HKEY_LOCAL_MACHINE\SYSTEM\Setup\Upgrade\Appx\DownlevelGather\AppxAllUserStore\S-1-5-21-3648988713-1279931744-352962703-1001\Microsoft.MicrosoftEdge_44.18362.1533.0_neutral__8wekyb3d8bbwe
-# Computer\HKEY_LOCAL_MACHINE\SYSTEM\Setup\Upgrade\Appx\DownlevelGather\PackageInstallState\Microsoft.MicrosoftEdge_44.18362.1533.0_neutral__8wekyb3d8bbwe
-
-
-
-
-
-
-
+$RK_Uninst_Locs = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+    "HKCU:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+)
+$RK_AppPath_Locs = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths"
+)
+$RK_AppxStores = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore"
+)
+$RK_AppxStores_Subkeys = @(
+    "Applications", "Config", "DownlevelGather", "DownlevelInstalled", "InboxApplications", "$SID"
+)
 
 
 # OSIntegrationLevel: default 5
@@ -306,7 +340,7 @@ $has_win_enterprise = ($edition -Like "*Enterprise*") -or ($edition -Like "*Edu*
 
 # Check if we have Winget already
 Get-Command winget 2>$null | Out-Null
-$has_winget = $?
+$global:has_winget = $?
 
 
 ### UTILITY FUNCTIONS ###
@@ -322,10 +356,13 @@ function RegistryPut ($Path, $Key, $Value, $VType) {
     New-ItemProperty -Path "$Path" -Name "$Key" -Value "$Value" -PropertyType "$VType" -Force | Out-Null
 }
 
-function RunScriptAsSystem ($Path, $ArgString) {
-    "  [Invoking script as SYSTEM]"
+function RunScriptAsSystem($Path, $ArgString) {
+    Write-Host "  [Invoking task as SYSTEM..." -NoNewline
+
     "$home" | Out-File -FilePath "C:\.PowerWashHome.tmp" -Force -NoNewline
-    # Adapted from https://github.com/mkellerman/Invoke-CommandAs/blob/master/Invoke-CommandAs/Private/Invoke-ScheduledTask.ps1
+    (Get-LocalUser -Name $env:USERNAME).Sid.Value | Out-File -FilePath "C:\.PowerWashSID.tmp" -Force -NoNewline
+
+    # Adapted from https://github.com/mkellerm1n/Invoke-CommandAs/blob/master/Invoke-CommandAs/Private/Invoke-ScheduledTask.ps1
     $Action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "$Path $ArgString"
     $Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     $Task = Register-ScheduledTask PowerWashSystemTask -Action $Action -Principal $Principal
@@ -333,7 +370,10 @@ function RunScriptAsSystem ($Path, $ArgString) {
     $Job | Wait-Job | Remove-Job -Force -Confirm:$False
     While (($Task | Get-ScheduledtaskInfo).LastTaskResult -eq 267009) { Start-Sleep -Milliseconds 200 }
     $Task | Unregister-ScheduledTask -Confirm:$false
-    "System level script completed successfully"
+    Write-Host " Complete]"
+
+    Remove-Item -Path "C:\.PowerWashHome.tmp"
+    Remove-Item -Path "C:\.PowerWashSID.tmp"
 }
 
 function TryDisableTask ($TaskName) {
@@ -390,23 +430,60 @@ function CreateShortcut($Dest, $Source, $Admin = $false) {
 
     if ($Admin) {
         $bytes = [System.IO.File]::ReadAllBytes("$home\Desktop\Toggle Updates.lnk")
-        $bytes[0x15] = $bytes[0x15] -bor 0x20 #set byte 21 (0x15) bit 6 (0x20) ON
+        $bytes[0x15] = $bytes[0x15] -bor 0x20  # set byte 21 (0x15) bit 6 (0x20) ON
         [System.IO.File]::WriteAllBytes("$home\Desktop\Toggle Updates.lnk", $bytes)
     }
 }
 
-$global:verbose_log = "C:\PowerWashVerbose.log"
-function SyslevelDebugLog($Msg) {
-    #$Msg | Out-File -FilePath $global:verbose_log -Append -Force
+function SysDebugLog {
+    param([Parameter(Mandatory, ValueFromPipeline)] $Msg)
+    process {
+        if ($global:is_debug) {
+            $Msg | Out-File -FilePath $global:sys_account_debug_log -Append -Force
+        }
+    }
+}
+
+function PSFormatRegPath ($Path, $SID) {
+    $result = "$Path".replace("HKEY_LOCAL_MACHINE", "HKLM:").replace("HKLM\", "HKLM:\").replace("HKCU\", "HKCU:\").replace("HKCU:", "HKEY_CURRENT_USER").replace("HKEY_CURRENT_USER", "HKEY_USERS\$SID")
+    if ($result.contains("HKEY_") -and -not ($result.contains("Registry::"))) {
+        $result = "Registry::$result"
+    }
+    return $result
+}
+
+function Install-Winget {
+    # https://github.com/microsoft/winget-cli/issues/1861#issuecomment-1435349454
+    Add-AppxPackage -Path "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
+
+    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.7.3" -OutFile ".\microsoft.ui.xaml.2.7.3.zip"
+    Expand-Archive ".\microsoft.ui.xaml.2.7.3.zip"
+    Add-AppxPackage ".\microsoft.ui.xaml.2.7.3\tools\AppX\x64\Release\Microsoft.UI.Xaml.2.7.appx"
+
+    "- Installing Winget..."
+    Invoke-WebRequest -Uri "https://github.com/microsoft/winget-cli/releases/download/v1.4.10173/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -OutFile ".\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+    Add-AppxPackage ".\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+	
+    $global:has_winget = $true
 }
 
 # Must be running as SYSTEM to modify certain Defender settings (even then, will need Tamper Protection off manually for some of them to take effect)
 # We have to bootstrap to this by scheduling a task to call this script with this flag
 
 if ("/ElevatedAction" -in $args) {
+    if ("$(whoami)" -ne "nt authority\system") {
+        ""
+        "ERROR: Can only run /ElevatedAction features as SYSTEM."
+        ""
+        exit
+    }
+
     $UserHome = Get-Content "C:\.PowerWashHome.tmp"
+    $UserSID = Get-Content "C:\.PowerWashSID.tmp"
+    $HKCU = "Registry::HKEY_USERS\$UserSID"  # SYSTEM user's HKCU is not the script user's HKCU
+    $HKCU_Classes = "$($HKCU)_Classes"
     Set-Location $UserHome
-    SyslevelDebugLog "ElevatedAction entering (user home = $UserHome)"
+    SysDebugLog "ElevatedAction entering (we are $(whoami); user home = $UserHome, user sid = $UserSID, args = $args)"
 
     if ("/DisableRealtimeMonitoring" -in $args) {
         Set-MpPreference -DisableRealtimeMonitoring $true
@@ -425,77 +502,283 @@ if ("/ElevatedAction" -in $args) {
         }
     }
     elseif ("/RemoveEdge" -in $args) {
+        $aggressive = ("/Aggressive" -in $args)
         if ("/RegistryStage" -in $args) {
             $keys_to_remove = @(
                 "HKLM:\SOFTWARE\WOW6432Node\Clients\StartMenuInternet\Microsoft Edge",
                 "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Edge",
                 "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate",
+                "HKLM:\SOFTWARE\Microsoft\Edge",
+                "$HKCU\SOFTWARE\Microsoft\Edge",
                 "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\MicrosoftEdgeUpdateTaskMachineCore",
                 "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\MicrosoftEdgeUpdateTaskMachineUA"
             )
             $keys_to_remove_by_child = @(
+                # Documented locations used to list installed applications
+                "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                "$HKCU\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+                "$HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+
+                "HKLM:\SOFTWARE\RegisteredApplications",
+                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths",
+
                 "HKLM:\SOFTWARE\Microsoft\SecurityManager\CapAuthz\ApplicationsEx",
+                "HKLM:\SOFTWARE\WOW6432Node\Microsoft\SecurityManager\CapAuthz\ApplicationsEx",
+
+                "HKLM:\SOFTWARE\Classes",
+                "HKLM:\SOFTWARE\Classes\WOW6432Node",
+                "HKLM:\SOFTWARE\WOW6432Node\Classes",
+                "$HKCU_Classes\ActivatableClasses\Package",
+                "$HKCU_Classes\Local Settings\MrtCache",
+                "$HKCU\SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData",
+
+                "$HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage\AppSwitched",
+                "$HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage\ShowJumpView",
+
                 "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Update\TargetingInfo\Installed",
-                "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+                "$HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AppHost\IndexedDB",
+
+                "HKLM:\SOFTWARE\Clients\StartMenuInternet",
+                "HKLM:\SOFTWARE\Policies\Microsoft"
             )
             $entries_to_remove_by_key = @(
-                "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
-                "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+                "$HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+                "$HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
                 "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
-                "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32",
+                "$HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32",
                 "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32",
-                "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder"
-                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder"
+                "$HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder"
+                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder",
+                "$HKCU\SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache"
             )
             $entries_to_remove_by_val = @(
                 "HKLM:\SOFTWARE\RegisteredApplications",
-                "HKCU:\SOFTWARE\RegisteredApplications"
+                "$HKCU\SOFTWARE\RegisteredApplications"
             )
-            SyslevelDebugLog "keys_to_remove"
+            $app_model = @(
+                "HKLM:\SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel",
+                "$HKCU\SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel"
+            )
+            $app_model_sub = @(
+                "PackageRepository\Extensions\ProgIDs",
+                "PackageRepository\Packages",
+                "PolicyCache",
+                "StateRepository"
+                "Repository\Families",
+                "Repository\Packages",
+                "SystemAppData"
+            )
+            $amcache_paths = @(
+                "Root\InventoryMiscellaneousUUPInfo",
+                "Root\InventoryApplicationShortcut",
+                "Root\InventoryApplicationFile"
+            )
+
+            SysDebugLog "keys_to_remove"
             $keys_to_remove | ForEach-Object {
-                SyslevelDebugLog "Reg remove: $_"
-                Remove-Item -Recurse -Force -Path "$_" | Tee-Object -FilePath $global:verbose_log
+                $path = PSFormatRegPath -Path $_ -SID $SID
+                if (-not (Test-Path $path)) {
+                    SysDebugLog "- Skipping nonexistent path $_"
+                }
+                else {
+                    SysDebugLog "- Reg remove: $path"
+                    Remove-Item -Recurse -Force -Path "$path" | SysDebugLog
+                }
             }
-            SyslevelDebugLog "keys_to_remove_by_child"
+
+            SysDebugLog "keys_to_remove_by_child"
             $keys_to_remove_by_child | ForEach-Object {
                 if (-not (Test-Path -Path $_)) {
-                    SyslevelDebugLog "Skipping nonexistent path $_"
+                    SysDebugLog "- Skipping nonexistent path $_"
                 }
                 else {
                     Get-ChildItem -Path $_ | Where-Object { $_ -Like "*Microsoft*Edge*" } | ForEach-Object {
-                        SyslevelDebugLog "Reg remove: $_"
-                        Remove-Item -Recurse -Force -Path $_ | Tee-Object -FilePath $global:verbose_log
+                        $path = PSFormatRegPath -Path $_ -SID $SID
+                        SysDebugLog "- Reg remove: $path"
+                        Remove-Item -Recurse -Force -Path $path | SysDebugLog
                     }
                 }
             }
-            SyslevelDebugLog "entries_to_remove_by_key"
+
+            SysDebugLog "entries_to_remove_by_key"
             $entries_to_remove_by_key | ForEach-Object {
                 $path = $_
                 if (-not (Test-Path -Path $path)) {
-                    SyslevelDebugLog "Skipping nonexistent path $path"
+                    SysDebugLog "- Skipping nonexistent path $path"
                 }
                 else {
                     (Get-ItemProperty -Path $path).PSObject.Properties | Where-Object { $_.Name -Like "* Microsoft*Edge*" } | ForEach-Object {
-                        SyslevelDebugLog "Reg remove: $path -> $($_.Name)"
-                        Remove-ItemProperty -Force -Path $path -Name $_.Name | Tee-Object -FilePath $global:verbose_log
+                        SysDebugLog "- Reg remove: $path -> $($_.Name)"
+                        Remove-ItemProperty -Force -Path $path -Name $_.Name | SysDebugLog
                     }
                 }
             }
-            SyslevelDebugLog "entries_to_remove_by_val"
+
+            SysDebugLog "entries_to_remove_by_val"
             $entries_to_remove_by_val | ForEach-Object {
                 $path = $_
                 if (-not (Test-Path -Path $path)) {
-                    SyslevelDebugLog "Skipping nonexistent path $path"
+                    SysDebugLog "- Skipping nonexistent path $path"
                 }
                 else {
                     (Get-ItemProperty -Path $path).PSObject.Properties | Where-Object { $_.Value -Like "*Microsoft*Edge*" } | ForEach-Object {
-                        SyslevelDebugLog "Reg remove: $path -> $($_.Name)"
-                        Remove-ItemProperty -Force -Path $path -Name $_.Name | Tee-Object -FilePath $global:verbose_log
+                        SysDebugLog "- Reg remove: $path -> $($_.Name)"
+                        Remove-ItemProperty -Force -Path $path -Name $_.Name | SysDebugLog
                     }
                 }
             }
+
+            SysDebugLog "rk_uninst_locs"
+            $RK_Uninst_Locs | ForEach-Object {
+                $root = $_
+                Get-ChildItem -Path $root | ForEach-Object {
+                    $path = PSFormatRegPath -Path $_ -SID $SID
+                    $name = (Get-ItemProperty -Path $path -Name "DisplayName" -EA SilentlyContinue).DisplayName
+                    if ($name -like "*Microsoft*Edge*") {
+                        SysDebugLog "- Reg remove: $path ($name)"
+                        Remove-Item -Recurse -Force -Path $path | SysDebugLog
+                    }
+                }
+            }
+            
+            if ($Aggressive) {
+                SysDebugLog "app_model"
+                $app_model | ForEach-Object {
+                    $root = $_
+                    $app_model_sub | ForEach-Object {
+                        $sub = "$root\$_"
+                        if (-not (Test-Path -Path $sub)) {
+                            SysDebugLog "- Skipping nonexistent path $sub"
+                        }
+                        else {
+                            Get-ChildItem -Path $sub | Where-Object { $_ -Like "*Microsoft*Edge*" } | ForEach-Object { 
+                                $path = PSFormatRegPath -Path $_ -SID $SID
+                                SysDebugLog "- Reg remove: $path"
+                                Remove-Item -Recurse -Force -Path $path | SysDebugLog
+                            }
+                        }
+                    }
+                }
+                
+                SysDebugLog "appx_stores"
+                $RK_AppxStores | ForEach-Object {
+                    $root = $_
+                    $RK_AppxStores_Subkeys | ForEach-Object {
+                        $sub = "$root\$_"
+                        Get-ChildItem -Path $sub -EA SilentlyContinue | ForEach-Object {
+                            $path = PSFormatRegPath -Path $_ -SID $SID
+                            if ($path -like "*Microsoft*Edge*") {
+                                SysDebugLog "- Reg remove: $path"
+                                Remove-Item -Recurse -Force -Path $path | SysDebugLog
+                            }
+                        }
+                    }
+                }
+
+                SysDebugLog "amcache"
+                $amcache_online = "C:\WINDOWS\AppCompat\Programs\Amcache.hve"
+                $amcache_offline = "C:\WINDOWS\AppCompat\Programs\AmcacheOffline.hve"
+                $amcache_offline_mod = "C:\WINDOWS\AppCompat\Programs\AmcacheOfflineMod.hve"
+                $amcache_offline_bak = "C:\WINDOWS\AppCompat\Programs\AmcacheOffline.hve.bak"
+                $amcache_offline_mount = "HKLM\amcacheoffline"
+                $amcache_success = $true
+                try {
+                    try {
+                        $amcache_online_handle = [System.io.File]::Open($amcache_online, "Open", "ReadWrite", "None")
+                        ">amcache online lock success"
+                    }
+                    catch {
+                        "- Could not open amcache online file, it is probably already in use"
+                        $_ | Format-List * -Force | Out-String | SysDebugLog
+                        $_.InvocationInfo | Format-List * -Force | Out-String | SysDebugLog
+                    }
+                    $amcache_offline_handle = [System.io.File]::Open($amcache_offline, "OpenOrCreate", "ReadWrite", "None")
+                    $amcache_online_handle.CopyTo($amcache_offline_handle)
+                    $amcache_offline_handle.Close()
+                    SysDebugLog ">amcache offline copy success"
+                    
+                    Copy-Item -Path $amcache_offline -Dest $amcache_offline_bak -Force
+                    SysDebugLog ">If anything goes wrong, Amcache backup is at $amcache_offline_bak"
+
+                    reg.exe load $amcache_offline_mount $amcache_offline
+                    SysDebugLog ">amcache mount offline copy success"
+
+                    $amcache_paths | ForEach-Object {
+                        $root = "$amcache_offline_mount\$_"
+                        $path = PSFormatRegPath -Path $root -SID $UserSID
+                        Get-ChildItem -Path $path | Where-Object { "$_" -like "*Microsoft*Edge*" -or "$_" -like "*MSEdge*" } | ForEach-Object {
+                            SysDebugLog "- Reg remove: $_"
+                            Remove-Item -Recurse -Force -Path (PSFormatRegPath -Path $_ -SID $UserSID)
+                        }
+                    }
+                    SysDebugLog ">amcache mount purge edge success"
+                    
+                    reg.exe save $amcache_offline_mount $amcache_offline_mod /y
+                    SysDebugLog ">amcache save offline copy success"
+
+                    reg.exe unload $amcache_offline_mount
+                    SysDebugLog ">amcache unmount offline copy success"
+
+                    try {
+                        $amcache_online_handle.SetLength(0)
+                        $amcache_offline_mod_handle = [System.IO.File]::Open($amcache_offline_mod, "OpenOrCreate", "ReadWrite", "None")
+                        $amcache_offline_mod_handle.CopyTo($amcache_online_handle)
+
+                        SysDebugLog ">amcache bring changes online and unlock success"
+                    }
+                    catch {
+                        SysDebugLog "- Failed to bring modifications back online"
+                        $_ | Format-List * -Force | Out-String | SysDebugLog
+                        $_.InvocationInfo | Format-List * -Force | Out-String | SysDebugLog
+                        $amcache_success = $false
+                    }
+                    finally {
+                        $amcache_offline_mod_handle.Close()
+                        $amcache_online_handle.Close()
+                    }
+
+                    if ($amcache_success) {
+                        Remove-Item -Path $amcache_offline -Force
+                        Remove-Item -Path $amcache_offline_mod -Force
+                        Remove-Item -Path $amcache_offline_bak -Force
+                        SysDebugLog ">amcache cleanup offline copy success"
+                    }
+                    else {
+                        SysDebugLog ">amcache cleanup skipped because errors occurred"
+                    }
+                }
+                catch {
+                    SysDebugLog "- Could not remove from Amcache, probably in use by another process"
+                    $_ | Format-List * -Force | Out-String | SysDebugLog
+                    $_.InvocationInfo | Format-List * -Force | Out-String | SysDebugLog
+                    $amcache_success = $false
+                }
+
+                if ($amcache_success) {
+                    "Success" | Out-File "C:\.PowerWashAmcacheStatus.tmp" -NoNewline
+                }
+                else {
+                    "Failure" | Out-File "C:\.PowerWashAmcacheStatus.tmp" -NoNewline
+                }
+            }
+        }
+        elseif ("/AppxInboxStage" -in $args) {
+            if (-not (Test-Path "C:\.appx.tmp")) {
+                SysDebugLog "Could not update live Appx database: C:\.appx.tmp is not found"
+            }
+            else {
+                SysDebugLog "write over live appx sqlite database"
+                sc.exe stop StateRepository | SysDebugLog
+                Copy-Item -Force -Path "C:\.appx.tmp" -Dest $appx_db | SysDebugLog
+                sc.exe start StateRepository | SysDebugLog
+                Remove-Item "C:\.appx.tmp"
+                SysDebugLog "-done"
+            }
         }
         elseif ("/FilesystemStage" -in $args) {
+
             $folders_to_remove = @(
                 "$UserHome\AppData\Local\Microsoft\Edge",
                 "$UserHome\AppData\Local\Microsoft\EdgeBho",
@@ -509,54 +792,71 @@ if ("/ElevatedAction" -in $args) {
                 "C:\ProgramData\Microsoft\Windows\AppRepository",
                 "C:\ProgramData\Microsoft\Windows\Start Menu\Programs",
                 "$UserHome\Desktop",
-                "$UserHome\AppData\Roaming\Microsoft\Internet Explorer\Quick Launch"
-                #^...Internet Explorer/Quick Launch/User Pinned/ImplicitAppShortcuts/<trash>"
+                "$UserHome\AppData\Local",
+                "$userHome\AppData\Local\Microsoft",
+                "$UserHome\AppData\Local\Packages",
+                "$UserHome\AppData\Roaming\Microsoft\Internet Explorer\Quick Launch",
+                "C:\Windows\Prefetch",
+                "C:\ProgramData\Microsoft"
             )
             $folders_to_remove_by_subfolder_aggressive = @(
                 "C:\Program Files (x86)\Microsoft"
             )
-            SyslevelDebugLog "folders_to_remove"
+
+            SysDebugLog "folders_to_remove"
             $folders_to_remove | ForEach-Object {
                 if (-not (Test-Path -Path $_)) {
-                    SyslevelDebugLog "Skipping nonexistent path $_"
+                    SysDebugLog "- Skipping nonexistent path $_"
                 }
                 else {
-                    SyslevelDebugLog "File remove: $_"
-                    Remove-Item -Recurse -Force -Path $_ | Tee-Object -FilePath $global:verbose_log
+                    SysDebugLog "- File remove: $_"
+                    Remove-Item -Recurse -Force -Path $_ | SysDebugLog
                 }
             }
-            SyslevelDebugLog "folders_to_remove_by_subfolder"
+
+            SysDebugLog "folders_to_remove_by_subfolder"
             $folders_to_remove_by_subfolder | ForEach-Object {
                 $path = $_
                 if (-not (Test-Path -Path $path)) {
-                    SyslevelDebugLog "Skipping nonexistent path $path"
+                    SysDebugLog "- Skipping nonexistent path $path"
                 }
                 else {
                     Get-ChildItem -Path $_ | Where-Object { $_ -Like "*Microsoft*Edge*" } | ForEach-Object {
-                        "File remove: $path\$_" | SyslevelDebugLog
-                        Remove-Item -Recurse -Force -Path "$path\$_" | Tee-Object -FilePath $global:verbose_log
+                        "- File remove: $path\$_" | SysDebugLog
+                        Remove-Item -Recurse -Force -Path "$path\$_" | SysDebugLog
                     }
                 }
             }
-            SyslevelDebugLog "folders_to_remove_by_subfolder_aggressive"
+
+            SysDebugLog "folders_to_remove_by_subfolder_aggressive"
             $folders_to_remove_by_subfolder_aggressive | ForEach-Object {
                 $path = $_
                 if (-not (Test-Path -Path $path)) {
-                    SyslevelDebugLog "Skipping nonexistent path $path"
+                    SysDebugLog "- Skipping nonexistent path $path"
                 }
                 else {
                     Get-ChildItem -Path $_ | Where-Object { $_ -Like "*Edge*" } | ForEach-Object {
-                        SyslevelDebugLog "File remove: $path\$_"
-                        Remove-Item -Recurse -Force -Path "$path\$_" | Tee-Object -FilePath $global:verbose_log
+                        SysDebugLog "- File remove: $path\$_"
+                        Remove-Item -Recurse -Force -Path "$path\$_" | SysDebugLog
+                    }
+                }
+            }
+
+            SysDebugLog "remove implicit app shortcuts"
+            $implicit_app_shortcuts = "$UserHome\AppData\Roaming\Microsoft\Internet Explorer\Quick Launch\User Pinned\ImplicitAppShortcuts"
+            if (Test-Path -Path $implicit_app_shortcuts) {
+                Get-ChildItem -Path $implicit_app_shortcuts | ForEach-Object {
+                    $path = "$implicit_app_shortcuts\$_"
+                    Get-ChildItem -Path $path | Where-Object { $_ -Like "*Edge*" } | ForEach-Object {
+                        SysDebugLog "- File remove: $path"
+                        Remove-Item -Recurse -Force -Path "$path" | SysDebugLog
                     }
                 }
             }
         }
     }
 
-    Remove-Item -Path "C:\.PowerWashHome.tmp"
-
-    SyslevelDebugLog "ElevatedAction exiting"
+    SysDebugLog "ElevatedAction exiting"
     exit
 }
 
@@ -838,7 +1138,107 @@ if (Confirm "Remove configured list of Windows capabilities?" -Auto $true -Confi
     "- Complete"
 }
 
-if (Confirm "Remove Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "Debloat.RemoveEdge") {
+if (Confirm "Remove phantom applications?" -Auto $true -ConfigKey "Debloat.RemovePhantom") {
+    $RK_Uninst_Locs | ForEach-Object {
+        $root = $_
+        Get-ChildItem -Path $root -EA SilentlyContinue | ForEach-Object {
+            $path = "$_".replace("HKEY_LOCAL_MACHINE", "HKLM:")
+            $name = (Get-ItemProperty -Path $path -Name "DisplayName" -EA SilentlyContinue).DisplayName
+            $install = (Get-ItemProperty -Path $path -Name "InstallLocation" -EA SilentlyContinue).InstallLocation
+            if ($install -and (-not (Test-Path -Path $install))) {
+                "- Removing phantom app $name (method 1)"
+                Remove-Item -Recurse -Force -Path $path
+            }
+        }
+    }
+    $RK_AppPath_Locs | ForEach-Object {
+        $root = $_
+        Get-ChildItem -Path $root | ForEach-Object {
+            $path = "$_".replace("HKEY_LOCAL_MACHINE", "HKLM:")
+            $install = (Get-ItemProperty -Path $path -Name "Path" -EA SilentlyContinue).Path
+            if ($install -and (-not (Test-Path -Path $install))) {
+                $name = [System.IO.Path]::GetFileName($install)
+                "- Removing phantom app $name (method 2)"
+                Remove-Item -Recurse -Force -Path $path
+            }
+        }
+    }
+    $RK_AppxStores | ForEach-Object {
+        $root = $_
+        $RK_AppxStores_Subkeys | ForEach-Object {
+            $sub = "$root\$_"
+            Get-ChildItem -Path $sub -EA SilentlyContinue | ForEach-Object {
+                $path = "$_".replace("HKEY_LOCAL_MACHINE", "HKLM:")
+                $install = (Get-ItemProperty -Path $path -Name "Path" -EA SilentlyContinue).Path
+                if ($install -and (-not (Test-Path -Path $install))) {
+                    $name = [System.IO.Path]::GetFileName($install)
+                    if ($name -notin @("Application", "AppxManifest.xml")) {
+                        "- Removing phantom app $name (method 2)"
+                        Remove-Item -Recurse -Force -Path $path
+                    }
+                }
+            }
+        }
+    }
+    "- Complete"
+}
+
+
+""
+""
+"### INSTALLATION CONFIGURATION ###"
+""
+
+
+# Install Group Policy editor, which isn't installed by default on Home editions
+# Allows easy tweaking of a wide range of settings without needing to edit registry
+if ((-not $has_win_pro) -and (-not $noinstall) -and (Confirm "Install Group Policy editor? (Not installed by default on Home editions)" -Auto $true -ConfigKey "Install.InstallGpEdit")) {
+    "- Installing Group Policy editor..."
+    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientTools-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
+    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientExtensions-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
+	
+    "- Complete"
+}
+
+if ((-not $global:has_winget) -and (Confirm "Install Winget package manager?" -Auto $false -ConfigKey "Install.InstallWinget")) {
+    "- Installing Winget dependencies..."
+	
+    Install-Winget
+	
+    "- Complete"
+}
+
+if ($global:has_winget) {
+    if (Confirm "Install configured applications?" -Auto $false -ConfigKey "Install.InstallConfigured") {
+        foreach ($params in $global:config_map.Install.InstallConfiguredList) {
+            & "winget" "install" "--accept-package-agreements" "--accept-source-agreements" "$params"
+        }
+        "- Complete"
+    }
+}
+else {
+    "Skipping install of configured applications: Winget not installed"
+}
+
+
+if (Confirm "Uninstall Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "Debloat.RemoveEdge") {
+    $aggressive = Confirm "--> Remove Microsoft Edge aggressively? (Removes extra traces of Edge from the filesystem and registry) (EXPERIMENTAL)" -Auto $false -ConfigKey "Debloat.RemoveEdge_ExtraTraces"
+    $aggressive_flag = $(If ($aggressive) { "/Aggressive" } Else { "" })
+
+    if (-not $has_sqlite) {
+        if (-not $has_winget) {
+            "- SQLite3 is required to remove Edge, and Winget is required to install SQLite3. Installing Winget now..."
+            Install-Winget
+            "- Winget installed"
+        }
+
+        "- Installing required dependency SQLite3..."
+        & "winget" "install" "--accept-package-agreements" "--accept-source-agreements" "SQLite.SQLite"
+        "- SQLite3 installed"
+
+        $sqlite3_cmd = "$home\AppData\Local\Microsoft\WinGet\Links\sqlite3.exe"
+    }
+
     "- NOTE: This feature is experimental and may not work completely or at all"
 	
     "- Marking Edge as removable..."
@@ -851,7 +1251,7 @@ if (Confirm "Remove Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "Deb
         foreach ($item in Get-ChildItem -Path "$edge_base") {
             $setup = "$edge_base\$item\Installer\setup.exe"
             if (Test-Path "$setup") {
-                "Removing Edge installation: $setup"
+                "  - Attempting to remove Edge installation: $setup"
                 & "$setup" --uninstall --msedge --system-level --verbose-logging --force-uninstall
             }
         }
@@ -860,26 +1260,45 @@ if (Confirm "Remove Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "Deb
     "- Removing Edge from provisioned packages..."
     $provisioned = (Get-AppxProvisionedPackage -Online | Where-Object { $_.PackageName -Like "*Edge*" }).PackageName
     if ($null -ne $provisioned) {
-        Remove-AppxProvisionedPackage -PackageName $provisioned -Online -AllUsers
+        Remove-AppxProvisionedPackage -PackageName $provisioned -Online -AllUsers 2>$null | Out-Null
     }
 
-    # Many registry keys to remove are protected by SYSTEM
-    "- Removing Edge from registry..."
-    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge /RegistryStage"
+    Write-Host "- Marking Edge as removable in Appx database..." -NoNewline
+    $appx_db = "C:\ProgramData\Microsoft\Windows\AppRepository\StateRepository-Machine.srd"
+    Copy-Item -Path $appx_db -Dest "C:\.appx.tmp" | Out-Null
+    @"
+    DROP TRIGGER IF EXISTS main.TRG_AFTER_UPDATE_Package_SRJournal;
+    UPDATE Package SET IsInbox=0 WHERE PackageFullName LIKE '%Microsoft%Edge%';
+    CREATE TRIGGER TRG_AFTER_UPDATE_Package_SRJournal AFTER UPDATE ON Package FOR EACH ROW WHEN is_srjournal_enabled()BEGIN UPDATE Sequence SET LastValue=LastValue+1 WHERE Id=2 ;INSERT INTO SRJournal(_Revision, _WorkId, ObjectType, Action, ObjectId, PackageIdentity, WhenOccurred, SequenceId)SELECT 1, workid(), 1, 2, NEW._PackageID, pi._PackageIdentityID, now(), s.LastValue FROM Sequence AS s CROSS JOIN PackageIdentity AS pi WHERE s.Id=2 AND pi.PackageFullName=NEW.PackageFullName;END;
+"@  | & $sqlite3_cmd "C:\.appx.tmp"
+    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /AppxInboxStage"
+
+    "- Removing Edge from Appx database..."
+    Get-AppxPackage -Name "*Microsoft*Edge*" | Remove-AppxPackage
 
     # Many folders to remove are protected by SYSTEM
-    "- Removing Edge from filesystem..."
-    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge /FilesystemStage"
+    Write-Host "- Removing Edge from filesystem..." -NoNewline
+    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /FilesystemStage"
 
-    "- Disabling Edge services..."
-    $services_to_disable = @(
+    # Many registry keys to remove are protected by SYSTEM
+    Write-Host "- Removing Edge from registry..." -NoNewline
+    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /RegistryStage"
+    $amcache_status = Get-Content "C:\.PowerWashAmcacheStatus.tmp"
+    Remove-Item "C:\.PowerWashAmcacheStatus.tmp"
+    if ($amcache_status -eq "Failure") {
+        "  - NOTICE: Could not remove Edge from Amcache registry hive, probably because it is in use by another process. You can restart your computer and try again later."
+    }
+
+    "- Removing Edge services..."
+    $services_to_delete = @(
         "edgeupdate",
         "edgeupdatem",
         "MicrosoftEdgeElevationService"
     )
-    $services_to_disable | ForEach-Object {
+    $services_to_delete | ForEach-Object {
         sc.exe stop $_ | Out-Null
         sc.exe config $_ start=disabled | Out-Null
+        sc.exe delete $_ | Out-Null
     }
 
     # Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\MicrosoftEdge
@@ -945,54 +1364,6 @@ else {
     "Windows Update toggle script already exists, skipping this feature"
 }
 
-
-
-""
-""
-"### INSTALLATION CONFIGURATION ###"
-""
-
-
-# Install Group Policy editor, which isn't installed by default on Home editions
-# Allows easy tweaking of a wide range of settings without needing to edit registry
-if ((-not $has_win_pro) -and (-not $noinstall) -and (Confirm "Install Group Policy editor? (Not installed by default on Home editions)" -Auto $true -ConfigKey "Install.InstallGpEdit")) {
-    "- Installing Group Policy editor..."
-    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientTools-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
-    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientExtensions-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
-	
-    "- Complete"
-}
-
-if ((-not $has_winget) -and (Confirm "Install Winget package manager?" -Auto $false -ConfigKey "Install.InstallWinget")) {
-    "- Installing Winget dependencies..."
-	
-    # https://github.com/microsoft/winget-cli/issues/1861#issuecomment-1435349454
-    Add-AppxPackage -Path https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx
-
-    Invoke-WebRequest -Uri https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.7.3 -OutFile .\microsoft.ui.xaml.2.7.3.zip
-    Expand-Archive .\microsoft.ui.xaml.2.7.3.zip
-    Add-AppxPackage .\microsoft.ui.xaml.2.7.3\tools\AppX\x64\Release\Microsoft.UI.Xaml.2.7.appx
-
-    "- Installing Winget..."
-    Invoke-WebRequest -Uri https://github.com/microsoft/winget-cli/releases/download/v1.4.10173/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle -OutFile .\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle
-    Add-AppxPackage .\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle
-	
-    $has_winget = $true
-	
-    "- Complete"
-}
-
-if ($has_winget) {
-    if (Confirm "Install configured applications?" -Auto $false -ConfigKey "Install.InstallConfigured") {
-        foreach ($params in $global:config_map.Install.InstallConfiguredList) {
-            & "winget" "install" "--accept-package-agreements" "--accept-source-agreements" "$params"
-        }
-        "- Complete"
-    }
-}
-else {
-    "Skipping install of configured applications: Winget not installed"
-}
 
 
 
