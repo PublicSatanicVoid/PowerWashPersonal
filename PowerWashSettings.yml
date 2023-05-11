@@ -105,8 +105,8 @@ Debloat:
   # WARNING: EXPERIMENTAL
   # Removes Microsoft Edge. Currently, some traces will remain, but the program itself will
   # at least be gone.
-  RemoveEdge: false # EXPERIMENTAL
-  RemoveEdge_ExtraTraces: false # EXPERIMENTAL
+  RemoveEdge: true # EXPERIMENTAL
+  RemoveEdge_ExtraTraces: true # EXPERIMENTAL
 
 # Settings pertaining to Windows Update
 WindowsUpdate:
