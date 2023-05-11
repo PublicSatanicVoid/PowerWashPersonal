@@ -173,6 +173,7 @@ $global:feature_verbs = @{
     "Debloat.RemoveWindowsCapabilities"            = "Removing configured list of Windows capabilities";
     "Debloat.RemovePhantom"                        = "Removing phantom applications";
     "Debloat.RemoveEdge"                           = "Removing Microsoft Edge";
+    "Debloat.RemoveEdge_ExtraTraces"               = "Removing extra traces of Microsoft Edge";
     "WindowsUpdate.DisableAutoUpdate"              = "Disabling automatic Windows updates";
     "WindowsUpdate.DisableAllUpdate"               = "Disabling Windows Update completely";
     "WindowsUpdate.AddUpdateToggleScriptToDesktop" = "Adding script to desktop to toggle Windows Update on/off";
@@ -576,6 +577,10 @@ if ("/ElevatedAction" -in $args) {
                 "Root\InventoryApplicationFile"
             )
 
+            SysDebugLog "keys_to_update"
+            RegistryPut "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\MicrosoftEdge" -Key "OSIntegrationLevel" -Value 0 -VType "DWORD"
+            RegistryPut "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Internet Explorer\EdgeIntegration" -Key "Supported" -Value 0 -VType "DWORD"
+
             SysDebugLog "keys_to_remove"
             $keys_to_remove | ForEach-Object {
                 $path = PSFormatRegPath -Path $_ -SID $SID
@@ -770,9 +775,9 @@ if ("/ElevatedAction" -in $args) {
             }
             else {
                 SysDebugLog "write over live appx sqlite database"
-                sc.exe stop StateRepository | SysDebugLog
+                Stop-Service -Force StateRepository | SysDebugLog
                 Copy-Item -Force -Path "C:\.appx.tmp" -Dest $appx_db | SysDebugLog
-                sc.exe start StateRepository | SysDebugLog
+                Start-Service StateRepository | SysDebugLog
                 Remove-Item "C:\.appx.tmp"
                 SysDebugLog "-done"
             }
@@ -1183,44 +1188,6 @@ if (Confirm "Remove phantom applications?" -Auto $true -ConfigKey "Debloat.Remov
     "- Complete"
 }
 
-
-""
-""
-"### INSTALLATION CONFIGURATION ###"
-""
-
-
-# Install Group Policy editor, which isn't installed by default on Home editions
-# Allows easy tweaking of a wide range of settings without needing to edit registry
-if ((-not $has_win_pro) -and (-not $noinstall) -and (Confirm "Install Group Policy editor? (Not installed by default on Home editions)" -Auto $true -ConfigKey "Install.InstallGpEdit")) {
-    "- Installing Group Policy editor..."
-    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientTools-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
-    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientExtensions-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
-	
-    "- Complete"
-}
-
-if ((-not $global:has_winget) -and (Confirm "Install Winget package manager?" -Auto $false -ConfigKey "Install.InstallWinget")) {
-    "- Installing Winget dependencies..."
-	
-    Install-Winget
-	
-    "- Complete"
-}
-
-if ($global:has_winget) {
-    if (Confirm "Install configured applications?" -Auto $false -ConfigKey "Install.InstallConfigured") {
-        foreach ($params in $global:config_map.Install.InstallConfiguredList) {
-            & "winget" "install" "--accept-package-agreements" "--accept-source-agreements" "$params"
-        }
-        "- Complete"
-    }
-}
-else {
-    "Skipping install of configured applications: Winget not installed"
-}
-
-
 if (Confirm "Uninstall Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "Debloat.RemoveEdge") {
     $aggressive = Confirm "--> Remove Microsoft Edge aggressively? (Removes extra traces of Edge from the filesystem and registry) (EXPERIMENTAL)" -Auto $false -ConfigKey "Debloat.RemoveEdge_ExtraTraces"
     $aggressive_flag = $(If ($aggressive) { "/Aggressive" } Else { "" })
@@ -1283,10 +1250,12 @@ if (Confirm "Uninstall Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "
     # Many registry keys to remove are protected by SYSTEM
     Write-Host "- Removing Edge from registry..." -NoNewline
     RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /RegistryStage"
-    $amcache_status = Get-Content "C:\.PowerWashAmcacheStatus.tmp"
-    Remove-Item "C:\.PowerWashAmcacheStatus.tmp"
-    if ($amcache_status -eq "Failure") {
-        "  - NOTICE: Could not remove Edge from Amcache registry hive, probably because it is in use by another process. You can restart your computer and try again later."
+    if (Test-Path "C:\.PowerWashAmcacheStatus.tmp") {
+        $amcache_status = Get-Content "C:\.PowerWashAmcacheStatus.tmp"
+        Remove-Item "C:\.PowerWashAmcacheStatus.tmp"
+        if ($amcache_status -eq "Failure") {
+            "  - NOTICE: Could not remove Edge from Amcache registry hive, probably because it is in use by another process. You can restart your computer and try again later."
+        }
     }
 
     "- Removing Edge services..."
@@ -1300,14 +1269,46 @@ if (Confirm "Uninstall Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "
         sc.exe config $_ start=disabled | Out-Null
         sc.exe delete $_ | Out-Null
     }
-
-    # Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\MicrosoftEdge
-    # ^ OSIntegrationLevel: 6 -> 0
-
-    # Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Internet Explorer\EdgeIntegration
-    # ^ Supported: 1 -> 0
 	
     "- Complete"
+}
+
+
+
+""
+""
+"### INSTALLATION CONFIGURATION ###"
+""
+
+
+# Install Group Policy editor, which isn't installed by default on Home editions
+# Allows easy tweaking of a wide range of settings without needing to edit registry
+if ((-not $has_win_pro) -and (-not $noinstall) -and (Confirm "Install Group Policy editor? (Not installed by default on Home editions)" -Auto $true -ConfigKey "Install.InstallGpEdit")) {
+    "- Installing Group Policy editor..."
+    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientTools-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
+    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientExtensions-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
+	
+    "- Complete"
+}
+
+if ((-not $global:has_winget) -and (Confirm "Install Winget package manager?" -Auto $false -ConfigKey "Install.InstallWinget")) {
+    "- Installing Winget dependencies..."
+	
+    Install-Winget
+	
+    "- Complete"
+}
+
+if ($global:has_winget) {
+    if (Confirm "Install configured applications?" -Auto $false -ConfigKey "Install.InstallConfigured") {
+        foreach ($params in $global:config_map.Install.InstallConfiguredList) {
+            & "winget" "install" "--accept-package-agreements" "--accept-source-agreements" "$params"
+        }
+        "- Complete"
+    }
+}
+else {
+    "Skipping install of configured applications: Winget not installed"
 }
 
 
