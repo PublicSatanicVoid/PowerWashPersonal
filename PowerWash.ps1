@@ -19,8 +19,6 @@ if ($global:is_debug) {
     ""
 }
 
-# $SQLITE_INSTALL_LOCATION = "C:\Program Files\SQLiteLibraries"
-
 ""
 "IMPORTANT NOTICE: It is recommended to restart before running PowerWash, to minimize the chance that certain system files will be in use by other programs. This is especially important if you are trying to remove Edge."
 ""
@@ -30,7 +28,6 @@ if ($global:is_debug) {
 ""
 
 
-$appx_db = "C:\ProgramData\Microsoft\Windows\AppRepository\StateRepository-Machine.srd"
 
 ### USAGE INFORMATION ###
 if ("/?" -in $args) {
@@ -63,7 +60,7 @@ if (-not $?) {
 Get-Command sqlite3 2>$null | Out-Null
 if (-not $?) {
     $has_sqlite = $false
-    "  - Could not find sqlite3 installation. Will install it automatically if needed."
+    "  - Could not find sqlite3 installation. Will install it automatically if/when needed."
 }
 else {
     $has_sqlite = $true
@@ -118,6 +115,9 @@ if ("/warnconfig" -in $args) {
     }
     if ($global:config_map.Debloat.RemoveEdge) {
         "* Will remove Microsoft Edge (EXPERIMENTAL)"
+        if ($global:config_map.Deblaot.RemoveEdge_ExtraTraces) {
+            "  - Will attempt to remove additional traces of Edge"
+        }
     }
     if ($global:config_map.Debloat.RemovePreinstalled) {
         "* Will remove the following preinstalled apps:"
@@ -128,7 +128,7 @@ if ("/warnconfig" -in $args) {
     if ($global:config_map.Debloat.RemoveWindowsCapabilities) {
         "* Will remove the following capabilities:"
         foreach ($cap in $global:config_map.Debloat.RemoveWindowsCapabilitiesList) {
-            " - $app"
+            "  - $app"
         }
     }
     if ($global:config_map.Debloat.RemovePhantom) {
@@ -773,6 +773,7 @@ if ("/ElevatedAction" -in $args) {
             }
         }
         elseif ("/AppxInboxStage" -in $args) {
+            $appx_db = "C:\ProgramData\Microsoft\Windows\AppRepository\StateRepository-Machine.srd"
             if (-not (Test-Path "C:\.appx.tmp")) {
                 SysDebugLog "Could not update live Appx database: C:\.appx.tmp is not found"
             }
@@ -1161,7 +1162,7 @@ if (Confirm "Remove phantom applications?" -Auto $true -ConfigKey "Debloat.Remov
     }
     $RK_AppPath_Locs | ForEach-Object {
         $root = $_
-        Get-ChildItem -Path $root | ForEach-Object {
+        Get-ChildItem -Path $root -EA SilentlyContinue | ForEach-Object {
             $path = "$_".replace("HKEY_LOCAL_MACHINE", "HKLM:")
             $install = (Get-ItemProperty -Path $path -Name "Path" -EA SilentlyContinue).Path
             if ($install -and (-not (Test-Path -Path $install))) {
@@ -1180,8 +1181,8 @@ if (Confirm "Remove phantom applications?" -Auto $true -ConfigKey "Debloat.Remov
                 $install = (Get-ItemProperty -Path $path -Name "Path" -EA SilentlyContinue).Path
                 if ($install -and (-not (Test-Path -Path $install))) {
                     $name = [System.IO.Path]::GetFileName($install)
-                    if ($name -notin @("Application", "AppxManifest.xml")) {
-                        "- Removing phantom app $name (method 2)"
+                    if ($name -notin @("Application", "AppxManifest.xml", "AppxBundleManifest.xml")) {
+                        "- Removing phantom app $name (method 3)"
                         Remove-Item -Recurse -Force -Path $path
                     }
                 }
