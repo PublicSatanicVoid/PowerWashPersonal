@@ -9,7 +9,7 @@ Unattend:
   # ONLY APPLIES TO UNATTENDED INSTALL MODE
   # Shows a message box for the user to confirm before running PowerWash
   # Otherwise, PowerWash will run immediately upon first logon right after Windows installs.
-  NotifyBeforePowerWash: false
+  NotifyBeforePowerWash: true
 
 # Windows settings to maximize performance
 Performance:
