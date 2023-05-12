@@ -29,6 +29,9 @@ if ($global:is_debug) {
 "for more details."
 ""
 
+
+$appx_db = "C:\ProgramData\Microsoft\Windows\AppRepository\StateRepository-Machine.srd"
+
 ### USAGE INFORMATION ###
 if ("/?" -in $args) {
     ".\PowerWash.ps1 [/all | /auto | /config | /stats | /warnconfig] [/noinstalls] [/noscans] [/autorestart]"
