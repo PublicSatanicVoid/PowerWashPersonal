@@ -142,7 +142,7 @@ Install:
 
   # Installs below list of Winget packages
   # Requires Winget to be installed.
-  InstallConfigured: false
+  InstallConfigured: true
   InstallConfiguredList:
     - Notepad++.Notepad++
     - Microsoft.WindowsTerminal
