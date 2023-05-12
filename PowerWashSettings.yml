@@ -100,7 +100,7 @@ Debloat:
 
   # Removes phantom programs, i.e. programs listed in the registry but which
   # do not actually exist.
-  RemovePhantom: true
+  RemovePhantom: false
 
   # WARNING: EXPERIMENTAL
   # Removes Microsoft Edge. Currently, some traces will remain, but the program itself will
@@ -109,7 +109,7 @@ Debloat:
 
   # Attempts to remove additional traces of Edge. May or may not be necessary to keep it from
   # reinstalling or showing up in e.g. package caches.
-  RemoveEdge_ExtraTraces: true # EXPERIMENTAL
+  RemoveEdge_ExtraTraces: false # EXPERIMENTAL
 
 # Settings pertaining to Windows Update
 WindowsUpdate:
@@ -140,7 +140,7 @@ Install:
 
   # Installs below list of Winget packages
   # Requires Winget to be installed.
-  InstallConfigured: false
+  InstallConfigured: true
   InstallConfiguredList:
     - Notepad++.Notepad++
     - Microsoft.WindowsTerminal

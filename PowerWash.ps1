@@ -1241,6 +1241,8 @@ if (Confirm "Uninstall Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "
     RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /AppxInboxStage"
 
     "- Removing Edge from Appx database..."
+    Stop-Service -Force StateRepository
+    Start-Service StateRepository
     Get-AppxPackage -Name "*Microsoft*Edge*" | Remove-AppxPackage
 
     # Many folders to remove are protected by SYSTEM
@@ -1270,6 +1272,9 @@ if (Confirm "Uninstall Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "
         sc.exe delete $_ | Out-Null
     }
 	
+    "- Disabling Edge in Windows Update..."
+    RegistryPut "HKLM:\SOFTWARE\Microsoft\EdgeUpdate" -Key "DoNotUpdateToEdgeWithChromium" -Value 1 -VType "DWORD"
+
     "- Complete"
 }
 
