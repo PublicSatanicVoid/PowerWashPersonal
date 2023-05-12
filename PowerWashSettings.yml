@@ -90,7 +90,7 @@ Debloat:
     - Microsoft.YourPhone
     - MicrosoftTeams
     - RivetNetworks.KillerControlCenter
-    - SpotifyAB.SpotifyMusic
+    #- SpotifyAB.SpotifyMusic
     # Cannot remove Edge this way. See "RemoveEdge" config value below instead.
 
   # Will remove the below list of Windows capabilities/features
