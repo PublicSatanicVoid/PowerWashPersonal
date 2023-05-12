@@ -107,11 +107,11 @@ Debloat:
   # WARNING: EXPERIMENTAL
   # Removes Microsoft Edge. Currently, some traces will remain, but the program itself will
   # at least be gone.
-  RemoveEdge: false # EXPERIMENTAL
+  RemoveEdge: true # EXPERIMENTAL
 
   # Attempts to remove additional traces of Edge. May or may not be necessary to keep it from
   # reinstalling or showing up in e.g. package caches.
-  RemoveEdge_ExtraTraces: false # EXPERIMENTAL
+  RemoveEdge_ExtraTraces: true # EXPERIMENTAL
 
 # Settings pertaining to Windows Update
 WindowsUpdate:
@@ -152,9 +152,9 @@ Install:
     - Microsoft.Sysinternals.ProcessMonitor
     - 7zip.7zip
     - Google.Chrome
-    #- Microsoft.VisualStudioCode
-    #- Discord.Discord
-    #- Valve.Steam
+    - Microsoft.VisualStudioCode
+    - Discord.Discord
+    - Valve.Steam
 
 # Settings related to Windows Defender.
 Defender:
