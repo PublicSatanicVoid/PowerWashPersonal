@@ -9,7 +9,7 @@ Unattend:
   # ONLY APPLIES TO UNATTENDED INSTALL MODE
   # Shows a message box for the user to confirm before running PowerWash
   # Otherwise, PowerWash will run immediately upon first logon right after Windows installs.
-  NotifyBeforePowerWash: true
+  NotifyBeforePowerWash: false
 
 # Windows settings to maximize performance
 Performance:
@@ -90,7 +90,7 @@ Debloat:
     - Microsoft.YourPhone
     - MicrosoftTeams
     - RivetNetworks.KillerControlCenter
-    #- SpotifyAB.SpotifyMusic
+    - SpotifyAB.SpotifyMusic
     # Cannot remove Edge this way. See "RemoveEdge" config value below instead.
 
   # Will remove the below list of Windows capabilities/features
@@ -121,12 +121,12 @@ WindowsUpdate:
   DisableAutoUpdate: true
 
   # Disables Windows Update entirely. Both automatic and manual updates are disabled.
-  DisableAllUpdate: false
+  DisableAllUpdate: true
 
   # Adds a script shortcut to the desktop to toggle Windows Update completely on/off.
   # This is the best compromise for Windows Home users, as it lets them keep updates off
   # except when they specifically want to update.
-  AddUpdateToggleScriptToDesktop: false
+  AddUpdateToggleScriptToDesktop: true
 
 # Optional utilities and commonly loaded programs to install.
 Install:
@@ -142,27 +142,27 @@ Install:
 
   # Installs below list of Winget packages
   # Requires Winget to be installed.
-  InstallConfigured: true
+  InstallConfigured: false
   InstallConfiguredList:
-    - Notepad++.Notepad++
-    - Microsoft.WindowsTerminal
-    - Gyan.FFmpeg
-    - Git.Git
-    - Microsoft.PowerToys
-    - Microsoft.Sysinternals.ProcessMonitor
     - 7zip.7zip
     - Google.Chrome
-    - Microsoft.VisualStudioCode
-    - Discord.Discord
-    - Valve.Steam
+    #- Notepad++.Notepad++
+    #- Microsoft.WindowsTerminal
+    #- Gyan.FFmpeg
+    #- Git.Git
+    #- Microsoft.PowerToys
+    #- Microsoft.Sysinternals.ProcessMonitor
+    #- Microsoft.VisualStudioCode
+    #- Discord.Discord
+    #- Valve.Steam
 
 # Settings related to Windows Defender.
 Defender:
   # Configures Defender and related software for high security.
-  # Some of these features require Enterprise and/or Microsoft Endpoint Security, e.g. Microsoft Defender for Business.
+  # Some of these features require Enterprise and/or Microsoft Defender 365, e.g. Microsoft Defender for Business.
   # Policies applied include Attack Surface Reduction, exploit mitigation, and browser security.
-  ApplyRecommendedSecurityPolicies: true
-  
+  ApplyRecommendedSecurityPolicies: false
+
   # Tells Defender to only run scans when the computer is idle.
   DefenderScanOnlyWhenIdle: true
   DefenderScanOnlyWhenIdle_TimeoutMins: 10
@@ -220,4 +220,4 @@ Scans:
   WarnAV: true
 
 # Whether to automatically restart the computer when PowerWash completes.
-AutoRestart: false
+AutoRestart: true

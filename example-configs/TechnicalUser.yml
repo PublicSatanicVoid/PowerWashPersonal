@@ -90,7 +90,7 @@ Debloat:
     - Microsoft.YourPhone
     - MicrosoftTeams
     - RivetNetworks.KillerControlCenter
-    #- SpotifyAB.SpotifyMusic
+    - SpotifyAB.SpotifyMusic
     # Cannot remove Edge this way. See "RemoveEdge" config value below instead.
 
   # Will remove the below list of Windows capabilities/features
@@ -107,11 +107,11 @@ Debloat:
   # WARNING: EXPERIMENTAL
   # Removes Microsoft Edge. Currently, some traces will remain, but the program itself will
   # at least be gone.
-  RemoveEdge: true # EXPERIMENTAL
+  RemoveEdge: false # EXPERIMENTAL
 
   # Attempts to remove additional traces of Edge. May or may not be necessary to keep it from
   # reinstalling or showing up in e.g. package caches.
-  RemoveEdge_ExtraTraces: true # EXPERIMENTAL
+  RemoveEdge_ExtraTraces: false # EXPERIMENTAL
 
 # Settings pertaining to Windows Update
 WindowsUpdate:
@@ -126,7 +126,7 @@ WindowsUpdate:
   # Adds a script shortcut to the desktop to toggle Windows Update completely on/off.
   # This is the best compromise for Windows Home users, as it lets them keep updates off
   # except when they specifically want to update.
-  AddUpdateToggleScriptToDesktop: false
+  AddUpdateToggleScriptToDesktop: true
 
 # Optional utilities and commonly loaded programs to install.
 Install:
@@ -144,25 +144,25 @@ Install:
   # Requires Winget to be installed.
   InstallConfigured: true
   InstallConfiguredList:
+    - 7zip.7zip
+    - Google.Chrome
     - Notepad++.Notepad++
     - Microsoft.WindowsTerminal
     - Gyan.FFmpeg
     - Git.Git
     - Microsoft.PowerToys
-    - Microsoft.Sysinternals.ProcessMonitor
-    - 7zip.7zip
-    - Google.Chrome
-    - Microsoft.VisualStudioCode
-    - Discord.Discord
-    - Valve.Steam
+    #- Microsoft.Sysinternals.ProcessMonitor
+    #- Microsoft.VisualStudioCode
+    #- Discord.Discord
+    #- Valve.Steam
 
 # Settings related to Windows Defender.
 Defender:
   # Configures Defender and related software for high security.
-  # Some of these features require Enterprise and/or Microsoft Endpoint Security, e.g. Microsoft Defender for Business.
+  # Some of these features require Enterprise and/or Microsoft Defender 365, e.g. Microsoft Defender for Business.
   # Policies applied include Attack Surface Reduction, exploit mitigation, and browser security.
-  ApplyRecommendedSecurityPolicies: true
-  
+  ApplyRecommendedSecurityPolicies: false
+
   # Tells Defender to only run scans when the computer is idle.
   DefenderScanOnlyWhenIdle: true
   DefenderScanOnlyWhenIdle_TimeoutMins: 10
@@ -220,4 +220,4 @@ Scans:
   WarnAV: true
 
 # Whether to automatically restart the computer when PowerWash completes.
-AutoRestart: false
+AutoRestart: true
