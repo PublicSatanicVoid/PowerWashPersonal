@@ -10,7 +10,7 @@
 #
 
 
-$development_computers = @("DESKTOP-8146PKJ", "DESKTOP-OIDHB0U")
+$development_computers = @("DESKTOP-DEPFV0F", "DESKTOP-OIDHB0U")
 $hostname = hostname
 $global:sys_account_debug_log = "C:\PowerWashSysActionsDbg.log"
 $global:is_debug = ($hostname -in $development_computers) -and $true
@@ -165,6 +165,7 @@ $global:feature_verbs = @{
     "Performance.MultimediaResponsiveness"         = "Applying high-performance multimedia settings";
     "Performance.NetworkResponsiveness"            = "Applying high-performance network adapter settings";
     "Performance.PowerSettingsMaxPerformance"      = "Applying high-performance power settings";
+    "Performance.AdjustVisualEffects"              = "Applying high-performance visual effects settings";
     "Performance.DisableFastStartup"               = "Disabling fast startup";
     "Performance.EnableDriverMsi"                  = "Enabling message-signaled interrupts on supported devices";
     "Performance.EnableDriverPrio"                 = "Prioritizing GPU and PCIe controller interrupts";
@@ -221,7 +222,8 @@ $RK_Defender_Features = "$RK_Defender\Features"
 $RK_Explorer = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer"
 $RK_Explorer_Advanced = "$RK_Explorer\Advanced"
 $RK_Explorer_Serialize = "$RK_Explorer\Serialize"
-#$RK_Startup = "$RK_Explorer\StartupApproved\Run"
+
+$RK_Ctl_Desktop = "HKCU:\Control Panel\Desktop"
 
 $RK_MMCSS = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
 $RK_MMCSS_ProAudio = "$RK_MMCSS\Tasks\Pro Audio"
@@ -246,11 +248,6 @@ $RK_AppxStores = @(
 $RK_AppxStores_Subkeys = @(
     "Applications", "Config", "DownlevelGather", "DownlevelInstalled", "InboxApplications", "$SID"
 )
-
-
-# OSIntegrationLevel: default 5
-# Protected by SYSTEM
-#$RK_Edge = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MicrosoftEdge"
 
 $RK_Privacy = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Privacy"
 $RK_Store_Update = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsStore\WindowsUpdate"
@@ -423,7 +420,7 @@ function UnpinApp($appname) {
 	((New-Object -Com Shell.Application).NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}').Items() `
     | Where-Object { $_.Name -eq $appname }).Verbs() `
     | Where-Object { $_.Name.replace('&', '') -match 'Unpin from taskbar' } `
-    | ForEach-Object { $_.DoIt() }
+    | ForEach-Object { $_.DoIt() } 2>$null | Out-Null
 }
 
 function CreateShortcut($Dest, $Source, $Admin = $false) {
@@ -434,9 +431,9 @@ function CreateShortcut($Dest, $Source, $Admin = $false) {
     $Shortcut.Save()
 
     if ($Admin) {
-        $bytes = [System.IO.File]::ReadAllBytes("$home\Desktop\Toggle Updates.lnk")
+        $bytes = [System.IO.File]::ReadAllBytes("$Dest")
         $bytes[0x15] = $bytes[0x15] -bor 0x20  # set byte 21 (0x15) bit 6 (0x20) ON
-        [System.IO.File]::WriteAllBytes("$home\Desktop\Toggle Updates.lnk", $bytes)
+        [System.IO.File]::WriteAllBytes("$Dest", $bytes)
     }
 }
 
@@ -470,6 +467,12 @@ function Install-Winget {
     Add-AppxPackage ".\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
 	
     $global:has_winget = $true
+}
+
+function Add-Path($Path) {
+    # https://poshcode.gitbook.io/powershell-faq/src/getting-started/environment-variables
+    $Path = [Environment]::GetEnvironmentVariable("PATH", "Machine") + [IO.Path]::PathSeparator + $Path
+    [Environment]::SetEnvironmentVariable("Path", $Path, "Machine")
 }
 
 # Must be running as SYSTEM to modify certain Defender settings (even then, will need Tamper Protection off manually for some of them to take effect)
@@ -780,8 +783,12 @@ if ("/ElevatedAction" -in $args) {
             }
             else {
                 SysDebugLog "write over live appx sqlite database"
+                sc.exe config StateRepository start=disabled | Out-Null
                 Stop-Service -Force StateRepository | SysDebugLog
+                Remove-Item "$($appx_db)-shm"
+                Remove-Item "$($appx_db)-wal"
                 Copy-Item -Force -Path "C:\.appx.tmp" -Dest $appx_db | SysDebugLog
+                sc.exe config StateRepository start=demand | Out-Null
                 Start-Service StateRepository | SysDebugLog
                 Remove-Item "C:\.appx.tmp"
                 SysDebugLog "-done"
@@ -866,10 +873,10 @@ if ("/ElevatedAction" -in $args) {
         }
     }
     elseif ("/ApplySecurityPolicy" -in $args) {
-        Enable-WindowsOptionalFeature -Online -FeatureName Windows-Defender-ApplicationGuard
+        #Enable-WindowsOptionalFeature -Online -FeatureName Windows-Defender-ApplicationGuard
 
         RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Network Protection" -Key "EnableNetworkProtection" -Value 1 -VType "DWORD"
-        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Controlled Folder Access" -Key "EnableControlledFolderAccess" -Value 1 -VType "DWORD"
+        #RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Controlled Folder Access" -Key "EnableControlledFolderAccess" -Value 1 -VType "DWORD"
         RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR" -Key "ExploitGuard_ASR_Rules" -Value 1 -VType "DWORD"
         $asr_guids = @(
             "26190899-1602-49e8-8b27-eb1d0a1ce869",
@@ -884,7 +891,8 @@ if ("/ElevatedAction" -in $args) {
             "be9ba2d9-53ea-4cdc-84e5-9b1eeee46550",
             "c1db55ab-c21a-4637-bb3f-a12568109d35",
             "d3e037e1-3eb8-44c8-a917-57927947596d",
-            "e6db77e5-3df2-4cf1-b95a-636979351e5b"
+            "e6db77e5-3df2-4cf1-b95a-636979351e5b",
+            "d4f940ab-401b-4efc-aadc-ad5f3c50688a"
         )
         $asr_guids | ForEach-Object {
             RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR\Rules" -Key "$_" -Value 1 -VType "String"
@@ -892,6 +900,8 @@ if ("/ElevatedAction" -in $args) {
         
         RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Scan" -Key "DisableRemovableDriveScanning" -Value 0 -VType "DWORD"
         
+        RegistryPut "HKLM:\Software\Policies\Microsoft\Microsoft Antimalware\NIS\Consumers\IPS" -Key "DisableSignatureRetirement" -Value 0 -VType "DWORD"
+
         RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "RestrictAnonymous" -Value 1 -VType "DWORD"
         RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "LmCompatibilityLevel" -Value 5 -VType "DWORD"
         RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "RunAsPPL" -Value 1 -VType "DWORD"
@@ -946,7 +956,7 @@ if ("/ElevatedAction" -in $args) {
 
 # Disable HPET (high precision event timer)
 # Some systems will benefit from this, some will suffer. Only way is to benchmark and see
-if (Confirm "Do you want to disable the high-precision event timer? (May not improve performance on all systems)" -Auto $false -ConfigKey "Performance.DisableHpet") {
+if (Confirm "Disable the high-precision event timer? (May not improve performance on all systems)" -Auto $false -ConfigKey "Performance.DisableHpet") {
     Get-PnpDevice -FriendlyName "High precision event timer" | Disable-Pnpdevice -Confirm:$false
     "- Complete"
 }
@@ -957,7 +967,7 @@ if (Confirm "Enable hardware-accelerated GPU scheduling?" -Auto $true -ConfigKey
 }
 
 # Multimedia related settings to prioritize audio
-if ($do_all -or (Confirm "Do you want to optimize multimedia settings for pro audio?" -Auto $true -ConfigKey "Performance.MultimediaResponsiveness")) {
+if ($do_all -or (Confirm "Optimize multimedia settings for pro audio?" -Auto $true -ConfigKey "Performance.MultimediaResponsiveness")) {
     # Scheduling algorithm will reserve 10% (default is 20%) of CPU for low-priority tasks
     RegistryPut $RK_MMCSS -Key "SystemResponsiveness" -Value 10 -VType "DWORD"
 	
@@ -1045,6 +1055,48 @@ if (Confirm "Redline power settings for maximum performance? (May reduce latency
     "- Complete"
 }
 
+if (Confirm "Adjust visual settings for better performance?" -Auto $false -ConfigKey "Performance.AdjustVisualEffects") {
+    # Mostly from https://superuser.com/a/1246803
+    Add-Type -TypeDefinition @"
+        using System;
+        using System.Runtime.InteropServices;
+        [StructLayout(LayoutKind.Sequential)] public struct ANIMATIONINFO {
+            public uint cbSize;
+            public bool iMinAnimate;
+        }
+        public class AnimationParamMgr {
+            [DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint uiAction, uint uiParam, ref ANIMATIONINFO pvParam, uint fWinIni);
+        }
+
+        public class RegularParamMgr {
+            [DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint uiAction, uint uiParam, ref object pvParam, uint fWinIni);
+        }
+"@
+    $animInfo = New-Object ANIMATIONINFO
+    $animInfo.cbSize = 8
+    $animInfo.iMinAnimate = 0
+    [AnimationParamMgr]::SystemParametersInfoW(0x49, 0, [ref]$animInfo, 3) | Out-Null
+
+    $disable = @(
+        0x1025, # Drop shadow on windows
+        # 0x004B,  # Font smoothing - most will want to keep this enabled
+        0x1005, # Combo box animation
+        0x101B, # Cursor shadow
+        0x1009, # Window title bar gradient effect
+        # 0x1007,  # Smooth-scrolling for list boxes - most will want to keep this enabled
+        0x1003, # Disabling this disables all menu animation features
+        0x1015, # Selection fade effect
+        0x1017, # Tooltip fade effect
+        0x0025  # Show window contents while dragging
+    )
+    $disable | ForEach-Object {
+        [RegularParamMgr]::SystemParametersInfoW($_, 0, [ref]$false, 3) | Out-Null
+    }
+
+    RegistryPut $RK_Ctl_Desktop -Key "DragFullWindows" -Value 0 -VType "DWORD"
+
+    "- Complete"
+}
 
 if (Confirm "Disable Fast Startup? (may fix responsiveness issues with some devices)" -Auto $true -ConfigKey "Performance.DisableFastStartup") {
     RegistryPut $RK_FastStartup -Key "HiberbootEnabled" -Value 0 -VType "DWORD"
@@ -1054,7 +1106,7 @@ if (Confirm "Disable Fast Startup? (may fix responsiveness issues with some devi
 # Enable MSI mode for devices that support it
 # Message-signaled interrupts are an alternative to line-based interrupts,
 # supporting a larger number of interrupts and lower latencies.
-if (Confirm "Do you want to enable Message-Signaled Interrupts for all devices that support them?" -Auto $true -ConfigKey "Performance.EnableDriverMsi") {
+if (Confirm "Enable Message-Signaled Interrupts for all devices that support them?" -Auto $true -ConfigKey "Performance.EnableDriverMsi") {
     $do_priority = Confirm "--> Do you also want to prioritize interrupts from certain devices like the GPU and PCIe controller?" -Auto $true -ConfigKey "Performance.EnableDriverPrio"
 	
     "- Applying interrupt policies..."
@@ -1102,7 +1154,7 @@ if (Confirm "Do you want to enable Message-Signaled Interrupts for all devices t
 
 
 # Disable Microsoft telemetry as much as we can
-if (Confirm "Do you want to disable Microsoft telemetry?" -Auto $true -ConfigKey "DisableTelemetry") {
+if (Confirm "Disable Microsoft telemetry?" -Auto $true -ConfigKey "DisableTelemetry") {
     # Windows has 4 levels of telemetry: Security, Required, Enhanced, Optional
     # According to Microsoft, only Enterprise supports Security as min telemetry level, other platforms only support Required
     # However, we can just always set it to Security and Windows will apply the lowest allowed setting.
@@ -1148,6 +1200,103 @@ if (Confirm "Do you want to disable Microsoft telemetry?" -Auto $true -ConfigKey
 "### BLOATWARE REMOVAL ###"
 ""
 
+
+if (Confirm "Uninstall Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "Debloat.RemoveEdge") {
+    $aggressive = Confirm "--> Remove Microsoft Edge aggressively? (Removes extra traces of Edge from the filesystem and registry) (EXPERIMENTAL)" -Auto $false -ConfigKey "Debloat.RemoveEdge_ExtraTraces"
+    $aggressive_flag = $(If ($aggressive) { "/Aggressive" } Else { "" })
+
+    if (-not $has_sqlite) {
+        "- Installing required dependency SQLite3..."
+        Invoke-WebRequest -Uri "https://sqlite.org/2023/sqlite-tools-win32-x86-3420000.zip" -OutFile "C:\sqlite.zip"
+        Expand-Archive "C:\sqlite.zip" -DestinationPath "C:\sqlite"
+        $subdir = (Get-ChildItem "C:\sqlite")[0].Name
+        $sqlite3_cmd = "C:\sqlite\$subdir\sqlite3.exe"
+        Add-Path "C:\sqlite\$subdir"
+        Remove-Item "C:\sqlite.zip"
+        "- SQLite3 installed"
+    }
+
+    "- NOTE: This feature is experimental and may not work completely or at all"
+
+    "- Stopping Microsoft Edge..."
+    taskkill /f /im msedge.exe 2>$null | Out-Null
+    taskkill /f /im MicrosoftEdgeUpdate.exe 2>$null | Out-Null
+	
+    "- Marking Edge as removable..."
+    RegistryPut $RK_Uninst_Edge -Key "NoRemove" -Value 0 -VType "DWORD"
+    RegistryPut $RK_Uninst_Edge -Key "NoRepair" -Value 0 -VType "DWORD"
+
+    "- Removing Edge from provisioned packages..."
+    $provisioned = (Get-AppxProvisionedPackage -Online | Where-Object { $_.PackageName -Like "*Edge*" }).PackageName
+    if ($null -ne $provisioned) {
+        Remove-AppxProvisionedPackage -PackageName $provisioned -Online -AllUsers 2>$null | Out-Null
+    }
+
+    Write-Host "- Marking Edge as removable in Appx database..." -NoNewline
+    $appx_db = "C:\ProgramData\Microsoft\Windows\AppRepository\StateRepository-Machine.srd"
+    Copy-Item -Path $appx_db -Dest "C:\.appx.tmp" | Out-Null
+    @"
+    DROP TRIGGER IF EXISTS main.TRG_AFTER_UPDATE_Package_SRJournal;
+    UPDATE Package SET IsInbox=0 WHERE PackageFullName LIKE '%Microsoft%Edge%';
+    CREATE TRIGGER TRG_AFTER_UPDATE_Package_SRJournal AFTER UPDATE ON Package FOR EACH ROW WHEN is_srjournal_enabled()BEGIN UPDATE Sequence SET LastValue=LastValue+1 WHERE Id=2 ;INSERT INTO SRJournal(_Revision, _WorkId, ObjectType, Action, ObjectId, PackageIdentity, WhenOccurred, SequenceId)SELECT 1, workid(), 1, 2, NEW._PackageID, pi._PackageIdentityID, now(), s.LastValue FROM Sequence AS s CROSS JOIN PackageIdentity AS pi WHERE s.Id=2 AND pi.PackageFullName=NEW.PackageFullName;END;
+"@  | & $sqlite3_cmd "C:\.appx.tmp"
+    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /AppxInboxStage"
+
+    "- Removing Edge from Appx database..."
+    Stop-Service -Force StateRepository
+    Start-Service StateRepository
+    Get-AppxPackage -Name "*Microsoft*Edge*" | Remove-AppxPackage
+
+    if ($aggressive) {
+        "- Attempting to remove Edge using setup tool..."
+        $edge_base = "C:\Program Files (x86)\Microsoft\Edge\Application\"
+        if (Test-Path "$edge_base") {
+            foreach ($item in Get-ChildItem -Path "$edge_base") {
+                $setup = "$edge_base\$item\Installer\setup.exe"
+                if (Test-Path "$setup") {
+                    "  - Attempting to remove Edge installation: $setup"
+                    & "$setup" --uninstall --msedge --system-level --verbose-logging --force-uninstall
+                }
+            }
+        }
+
+        # Many folders to remove are protected by SYSTEM
+        Write-Host "- Removing Edge from filesystem..." -NoNewline
+        RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /FilesystemStage"
+
+        # Many registry keys to remove are protected by SYSTEM
+        Write-Host "- Removing Edge from registry..." -NoNewline
+        RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /RegistryStage"
+        if (Test-Path "C:\.PowerWashAmcacheStatus.tmp") {
+            $amcache_status = Get-Content "C:\.PowerWashAmcacheStatus.tmp"
+            Remove-Item "C:\.PowerWashAmcacheStatus.tmp"
+            if ($amcache_status -eq "Failure") {
+                "  - NOTICE: Could not remove Edge from Amcache registry hive, probably because it is in use by another process. You can restart your computer and try again later."
+            }
+        }
+
+        "- Removing Edge services..."
+        $services_to_delete = @(
+            "edgeupdate",
+            "edgeupdatem",
+            "MicrosoftEdgeElevationService"
+        )
+        $services_to_delete | ForEach-Object {
+            sc.exe stop $_ | Out-Null
+            sc.exe config $_ start=disabled | Out-Null
+            sc.exe delete $_ | Out-Null
+        }
+
+        "- Disabling Edge tasks..."
+        TryDisableTask "MicrosoftEdgeUpdateTaskMachineCore"
+        TryDisableTask "MicrosoftEdgeUpdateTaskMachineUA"
+
+        "- Disabling Edge in Windows Update..."
+        RegistryPut "HKLM:\SOFTWARE\Microsoft\EdgeUpdate" -Key "DoNotUpdateToEdgeWithChromium" -Value 1 -VType "DWORD"
+    }
+    
+    "- Complete"
+}
 
 if (Confirm "Disable Cortana?" -Auto $true -ConfigKey "Debloat.DisableCortana") {
     RegistryPut $RK_Policy_Search -Key "AllowCortana" -Value 0 -VType "DWORD"
@@ -1263,96 +1412,6 @@ if (Confirm "Remove phantom applications?" -Auto $true -ConfigKey "Debloat.Remov
     "- Complete"
 }
 
-if (Confirm "Uninstall Microsoft Edge? (EXPERIMENTAL)" -Auto $false -ConfigKey "Debloat.RemoveEdge") {
-    $aggressive = Confirm "--> Remove Microsoft Edge aggressively? (Removes extra traces of Edge from the filesystem and registry) (EXPERIMENTAL)" -Auto $false -ConfigKey "Debloat.RemoveEdge_ExtraTraces"
-    $aggressive_flag = $(If ($aggressive) { "/Aggressive" } Else { "" })
-
-    if (-not $has_sqlite) {
-        if (-not $has_winget) {
-            "- SQLite3 is required to remove Edge, and Winget is required to install SQLite3. Installing Winget now..."
-            Install-Winget
-            "- Winget installed"
-        }
-
-        "- Installing required dependency SQLite3..."
-        & "winget" "install" "--accept-package-agreements" "--accept-source-agreements" "SQLite.SQLite"
-        "- SQLite3 installed"
-
-        $sqlite3_cmd = "$home\AppData\Local\Microsoft\WinGet\Links\sqlite3.exe"
-    }
-
-    "- NOTE: This feature is experimental and may not work completely or at all"
-	
-    "- Marking Edge as removable..."
-    RegistryPut $RK_Uninst_Edge -Key "NoRemove" -Value 0 -VType "DWORD"
-    RegistryPut $RK_Uninst_Edge -Key "NoRepair" -Value 0 -VType "DWORD"
-	
-    "- Attempting to remove Edge using setup tool..."
-    $edge_base = "C:\Program Files (x86)\Microsoft\Edge\Application\"
-    if (Test-Path "$edge_base") {
-        foreach ($item in Get-ChildItem -Path "$edge_base") {
-            $setup = "$edge_base\$item\Installer\setup.exe"
-            if (Test-Path "$setup") {
-                "  - Attempting to remove Edge installation: $setup"
-                & "$setup" --uninstall --msedge --system-level --verbose-logging --force-uninstall
-            }
-        }
-    }
-	
-    "- Removing Edge from provisioned packages..."
-    $provisioned = (Get-AppxProvisionedPackage -Online | Where-Object { $_.PackageName -Like "*Edge*" }).PackageName
-    if ($null -ne $provisioned) {
-        Remove-AppxProvisionedPackage -PackageName $provisioned -Online -AllUsers 2>$null | Out-Null
-    }
-
-    Write-Host "- Marking Edge as removable in Appx database..." -NoNewline
-    $appx_db = "C:\ProgramData\Microsoft\Windows\AppRepository\StateRepository-Machine.srd"
-    Copy-Item -Path $appx_db -Dest "C:\.appx.tmp" | Out-Null
-    @"
-    DROP TRIGGER IF EXISTS main.TRG_AFTER_UPDATE_Package_SRJournal;
-    UPDATE Package SET IsInbox=0 WHERE PackageFullName LIKE '%Microsoft%Edge%';
-    CREATE TRIGGER TRG_AFTER_UPDATE_Package_SRJournal AFTER UPDATE ON Package FOR EACH ROW WHEN is_srjournal_enabled()BEGIN UPDATE Sequence SET LastValue=LastValue+1 WHERE Id=2 ;INSERT INTO SRJournal(_Revision, _WorkId, ObjectType, Action, ObjectId, PackageIdentity, WhenOccurred, SequenceId)SELECT 1, workid(), 1, 2, NEW._PackageID, pi._PackageIdentityID, now(), s.LastValue FROM Sequence AS s CROSS JOIN PackageIdentity AS pi WHERE s.Id=2 AND pi.PackageFullName=NEW.PackageFullName;END;
-"@  | & $sqlite3_cmd "C:\.appx.tmp"
-    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /AppxInboxStage"
-
-    "- Removing Edge from Appx database..."
-    Stop-Service -Force StateRepository
-    Start-Service StateRepository
-    Get-AppxPackage -Name "*Microsoft*Edge*" | Remove-AppxPackage
-
-    # Many folders to remove are protected by SYSTEM
-    Write-Host "- Removing Edge from filesystem..." -NoNewline
-    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /FilesystemStage"
-
-    # Many registry keys to remove are protected by SYSTEM
-    Write-Host "- Removing Edge from registry..." -NoNewline
-    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /RegistryStage"
-    if (Test-Path "C:\.PowerWashAmcacheStatus.tmp") {
-        $amcache_status = Get-Content "C:\.PowerWashAmcacheStatus.tmp"
-        Remove-Item "C:\.PowerWashAmcacheStatus.tmp"
-        if ($amcache_status -eq "Failure") {
-            "  - NOTICE: Could not remove Edge from Amcache registry hive, probably because it is in use by another process. You can restart your computer and try again later."
-        }
-    }
-
-    "- Removing Edge services..."
-    $services_to_delete = @(
-        "edgeupdate",
-        "edgeupdatem",
-        "MicrosoftEdgeElevationService"
-    )
-    $services_to_delete | ForEach-Object {
-        sc.exe stop $_ | Out-Null
-        sc.exe config $_ start=disabled | Out-Null
-        sc.exe delete $_ | Out-Null
-    }
-	
-    "- Disabling Edge in Windows Update..."
-    RegistryPut "HKLM:\SOFTWARE\Microsoft\EdgeUpdate" -Key "DoNotUpdateToEdgeWithChromium" -Value 1 -VType "DWORD"
-
-    "- Complete"
-}
-
 
 
 ""
@@ -1368,6 +1427,26 @@ if ((-not $has_win_pro) -and (-not $noinstall) -and (Confirm "Install Group Poli
     cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientTools-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
     cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientExtensions-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
 	
+    "- Complete"
+}
+
+if ((-not $has_win_pro) -and (-not $noinstall) -and (Confirm "Install Hyper-V? (Not installed by default on Home editions)" -Auto $false -ConfigKey "Install.InstallHyperV")) {
+    "- Enumerating packages..."
+    $pkgs = Get-ChildItem C:\Windows\servicing\Packages | Where-Object { $_.Name -like "*Hyper*V*mum" }
+    
+    "- Installing packages..."
+    $i = 1
+    $pkgs | ForEach-Object {
+        $pkg = $_.Name
+        "  - ($i/$($pkgs.Length)) $pkg"
+        DISM.exe /Online /NoRestart /Add-Package:"C:\Windows\servicing\Packages\$pkg" 2>$null | Out-Null
+        $i++
+    }    
+
+    "- Enabling Hyper-V..."
+    # DISM.exe /Online /NoRestart /Enable-Feature /featurename:Microsoft-Hyper-V -All /LimitAccess /All 2>$null | Out-Null
+    Enable-WindowsOptionalFeature -Online -NoRestart -FeatureName Microsoft-Hyper-V -All | Out-Null
+
     "- Complete"
 }
 
@@ -1401,7 +1480,7 @@ else {
 
 # Disable automatic updates
 if ($has_win_pro) {
-    if (Confirm "Do you want to disable automatic Windows updates?" -Auto $true -ConfigKey "WindowsUpdate.DisableAutoUpdate") {
+    if (Confirm "Disable automatic Windows updates?" -Auto $true -ConfigKey "WindowsUpdate.DisableAutoUpdate") {
         RegistryPut $RK_Policy_Update_AU -Key "NoAutoUpdate" -Value 1 -VType "DWORD"
         RegistryPut $RK_Policy_Update_AU -Key "AUOptions" -Value 2 -VType "DWORD"
         RegistryPut $RK_Policy_Update_AU -Key "AllowMUUpdateService" -Value 1 -VType "DWORD"
@@ -1418,7 +1497,7 @@ else {
 }
 
 # Disable all updates
-if (Confirm "Do you want to disable all Windows updates? (You will need to manually re-enable them when you want to check or install updates)" -Auto $false -ConfigKey "WindowsUpdate.DisableAllUpdate") {
+if (Confirm "Disable all Windows updates? (You will need to manually re-enable them when you want to check or install updates)" -Auto $false -ConfigKey "WindowsUpdate.DisableAllUpdate") {
     sc.exe stop UsoSvc | Out-Null
     sc.exe config UsoSvc start=disabled | Out-Null
 
@@ -1434,7 +1513,7 @@ if (Confirm "Do you want to disable all Windows updates? (You will need to manua
 # Add update toggle script to desktop
 # This is the next best thing for Home users to being able to disable automatic updates. They can toggle updates on when they want to check or install updates, and toggle updates back off when they're done.
 if ((-not (Test-Path "$home\Documents\.ToggleUpdates.bat")) -or (-not (Test-Path "$home\Desktop\Toggle Updates.lnk"))) {
-    if (Confirm "Do you want to add a script to your desktop that lets you toggle Windows updates on or off?" -Auto $false -ConfigKey "WindowsUpdate.AddUpdateToggleScriptToDesktop") {
+    if (Confirm "Add a script to your desktop that lets you toggle Windows updates on or off?" -Auto $false -ConfigKey "WindowsUpdate.AddUpdateToggleScriptToDesktop") {
         Invoke-WebRequest -Uri "https://raw.githubusercontent.com/UniverseCraft/WindowsPowerWash/main/extra/ToggleUpdates.bat" -OutFile $home\Documents\.ToggleUpdates.bat
         
         CreateShortcut -Dest "$home\Desktop\Toggle Updates.lnk" -Source "$home\Documents\.ToggleUpdates.bat" -Admin $true
@@ -1511,19 +1590,19 @@ if (Confirm "Disable app startup delay?" -Auto $true -ConfigKey "Convenience.Dis
 }
 
 # Seconds in taskbar
-if (Confirm "Do you want to show seconds in the taskbar clock?" -Auto $false -ConfigKey "Convenience.ShowSecondsInTaskbar") {
+if (Confirm "Show seconds in the taskbar clock?" -Auto $false -ConfigKey "Convenience.ShowSecondsInTaskbar") {
     RegistryPut $RK_Explorer_Advanced -Key "ShowSecondsInSystemClock" -Value 1 -VType "DWORD"
     "- Complete"
 }
 
 # Show "Run as different user"
-if (Confirm "Do you want to show 'Run as different user' in Start?" -Auto $true -ConfigKey "Convenience.ShowRunAsDifferentUser") {
+if (Confirm "Show 'Run as different user' in Start?" -Auto $true -ConfigKey "Convenience.ShowRunAsDifferentUser") {
     RegistryPut $RK_Policy_Explorer -Key "ShowRunAsDifferentUserInStart" -Value 1 -VType "DWORD"
     "- Complete"
 }
 
 # Show useful Explorer stuff
-if (Confirm "Do you want to show file extensions and hidden files in Explorer?" -Auto $true -ConfigKey "Convenience.ShowHiddenExplorer") {
+if (Confirm "Show file extensions and hidden files in Explorer?" -Auto $true -ConfigKey "Convenience.ShowHiddenExplorer") {
     RegistryPut $RK_Explorer_Advanced -Key "Hidden" -Value 1 -VType "DWORD"
     RegistryPut $RK_Explorer_Advanced -Key "HideFileExt" -Value 0 -VType "DWORD"
     "- Complete"
