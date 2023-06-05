@@ -161,6 +161,7 @@ Install:
     - Gyan.FFmpeg
     - Git.Git
     - 7zip.7zip
+    - Microsoft.VisualStudioCode
     - TorProject.TorBrowser
 
 # Settings related to Windows Defender.
