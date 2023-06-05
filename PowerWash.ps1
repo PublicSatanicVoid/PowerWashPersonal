@@ -343,6 +343,7 @@ $has_win_enterprise = ($edition -Like "*Enterprise*") -or ($edition -Like "*Edu*
 # Check if we have Winget already
 Get-Command winget 2>$null | Out-Null
 $global:has_winget = $?
+$global:winget_cmd = "winget"
 
 
 ### UTILITY FUNCTIONS ###
@@ -469,6 +470,7 @@ function Install-Winget {
     Add-AppxProvisionedPackage -Online -PackagePath ".\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -LicensePath ".\5d9d44b170c146e1a3085c2c75fcc2c1_License1.xml"
 
     $global:has_winget = $true
+    $global:winget_cmd = "$home\AppData\Local\Microsoft\WindowsApps\winget.exe"
 }
 
 function Add-Path($Path) {
@@ -1475,7 +1477,7 @@ if ((-not $global:has_winget) -and (Confirm "Install Winget package manager?" -A
 if ($global:has_winget) {
     if (Confirm "Install configured applications?" -Auto $false -ConfigKey "Install.InstallConfigured") {
         foreach ($params in $global:config_map.Install.InstallConfiguredList) {
-            & "winget" "install" "--accept-package-agreements" "--accept-source-agreements" "$params"
+            & $global:winget_cmd "install" "--accept-package-agreements" "--accept-source-agreements" "$params"
         }
         "- Complete"
     }
