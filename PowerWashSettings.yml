@@ -35,7 +35,7 @@ Performance:
 
   # Sets visual effects settings to maximum performance, e.g. disables many Windows animations.
   # Does not disable font smoothing.
-  AdjustVisualEffects: false
+  AdjustVisualEffects: true
 
   # Fast Startup can prevent some drivers from initializing properly. Disabling it may
   # cause your device to boot more slowly, but it's generally worth it. Too many issues
@@ -99,6 +99,9 @@ Debloat:
 
   # Will remove the below list of Windows capabilities/features
   RemoveWindowsCapabilities: true
+
+  # NOTE: Make sure not to remove Browser.InternetExplorer capability and Edge browser below
+  # if running on a fresh install, or you will have no web browser!
   RemoveWindowsCapabilitiesList:
     - OneCoreUAP.OneSync
     - Microsoft.Windows.WordPad
@@ -108,14 +111,14 @@ Debloat:
   # do not actually exist.
   RemovePhantom: true
 
-  # WARNING: EXPERIMENTAL
-  # Removes Microsoft Edge. Currently, some traces will remain, but the program itself will
-  # at least be gone.
-  RemoveEdge: false # EXPERIMENTAL
+  # Removes Microsoft Edge. Some traces may remain.
+  # NOTE: Make sure not to remove Edge and the Browser.InternetExplorer capability above if
+  # running on a fresh install, or you will have no web browser!
+  RemoveEdge: true
 
   # Attempts to remove additional traces of Edge. May or may not be necessary to keep it from
   # reinstalling or showing up in e.g. package caches.
-  RemoveEdge_ExtraTraces: false # EXPERIMENTAL
+  RemoveEdge_ExtraTraces: true
 
 # Settings pertaining to Windows Update
 WindowsUpdate:
@@ -151,26 +154,21 @@ Install:
 
   # Installs below list of Winget packages
   # Requires Winget to be installed.
-  InstallConfigured: false
+  InstallConfigured: true
   InstallConfiguredList:
     - Notepad++.Notepad++
     - Microsoft.WindowsTerminal
     - Gyan.FFmpeg
     - Git.Git
-    - Microsoft.PowerToys
-    - Microsoft.Sysinternals.ProcessMonitor
     - 7zip.7zip
-    - Google.Chrome
-    #- Microsoft.VisualStudioCode
-    #- Discord.Discord
-    #- Valve.Steam
+    - TorProject.TorBrowser
 
 # Settings related to Windows Defender.
 Defender:
   # Configures Defender and related software for high security.
   # Some of these features require Enterprise and/or Microsoft Endpoint Security, e.g. Microsoft Defender for Business.
   # Policies applied include Attack Surface Reduction, exploit mitigation, and browser security.
-  ApplyRecommendedSecurityPolicies: false
+  ApplyRecommendedSecurityPolicies: true
 
   # Tells Defender to only run scans when the computer is idle.
   DefenderScanOnlyWhenIdle: true
