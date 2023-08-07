@@ -9,21 +9,33 @@
 # USE AT YOUR OWN RISK. BACKUP SYSTEM BEFORE USING.
 #
 
+$global:ScriptName = $MyInvocation.MyCommand.Name
 
-$development_computers = @("DESKTOP-DEPFV0F", "DESKTOP-OIDHB0U")
 $hostname = hostname
 $global:sys_account_debug_log = "$env:SystemDrive\PowerWashSysActionsDbg.log"
-$global:is_debug = ($hostname -in $development_computers) -and $true
+$global:is_debug = $false
 if ($global:is_debug) {
     "POWERWASH DEBUG MODE IS ON"
     ""
 }
 
+
+$global:is_msert = "/msert" -in $args  # Microsoft Edge Removal Tool- specifies to only run Edge removal features of PowerWash
+if ($global:is_msert) {
+    $global:tool_name = "MSERT"
+}
+else {
+    $global:tool_name = "PowerWash"
+}
+
+
+if (-not $global:is_msert) {
+    ""
+    "IMPORTANT NOTICE: It is recommended to restart before running PowerWash, to minimize the chance that certain system files will be in use by other programs. This is especially important if you are trying to remove Edge."
+}
 ""
-"IMPORTANT NOTICE: It is recommended to restart before running PowerWash, to minimize the chance that certain system files will be in use by other programs. This is especially important if you are trying to remove Edge."
-""
-"IMPORTANT NOTICE: It is recommended to create a system restore point before running PowerWash. The author of PowerWash takes no responsibility for its effects on the user's system; see"
-"    https://github.com/UniverseCraft/WindowsPowerWash/blob/main/LICENSE"
+"IMPORTANT NOTICE: It is recommended to create a system restore point before running $global:tool_name. The author of $global:tool_name takes no responsibility for its effects on the user's system; see"
+"    https://github.com/PublicSatanicVoid/WindowsPowerWash/blob/main/LICENSE"
 "for more details."
 ""
 
@@ -31,7 +43,7 @@ if ($global:is_debug) {
 
 ### USAGE INFORMATION ###
 if ("/?" -in $args) {
-    ".\PowerWash.ps1 [/all | /auto | /config | /stats | /warnconfig] [/noinstalls] [/noscans] [/autorestart]"
+    ".\$global:ScriptName [/all | /auto | /config | /stats | /warnconfig] [/noinstalls] [/noscans] [/autorestart]"
     "	/all			Runs all PowerWash features without prompting"
     "	/auto			Runs a default subset of PowerWash features, without prompting"
     "	/config			Runs actions enabled in PowerWashSettings.json, without prompting"
@@ -45,26 +57,18 @@ if ("/?" -in $args) {
 
 
 "Loading dependencies..."
-"- NuGet package manager"
-if ("NuGet" -notin (Get-PackageProvider | Select-Object Name).Name) {
-    Install-PackageProvider -Name NuGet -Force | Out-Null
-    "  - Installed NuGet package manager"
-}
-"- powershell-yaml module"
-Import-Module powershell-yaml 2>$null | Out-Null
-if (-not $?) {
-    Install-Module -Name powershell-yaml -Force
-    " - Installed powershell-yaml module"
-}
-"- sqlite3"
-Get-Command sqlite3 2>$null | Out-Null
-if (-not $?) {
-    $has_sqlite = $false
-    "  - Could not find sqlite3 installation. Will install it automatically if/when needed."
-}
-else {
-    $has_sqlite = $true
-    $sqlite3_cmd = (Get-Command sqlite3).Source
+if (-not $global:is_msert) {
+    "- NuGet package manager"
+    if ("NuGet" -notin (Get-PackageProvider | Select-Object Name).Name) {
+        Install-PackageProvider -Name NuGet -Force | Out-Null
+        "  - Installed NuGet package manager"
+    }
+    "- powershell-yaml module"
+    Import-Module powershell-yaml 2>$null | Out-Null
+    if (-not $?) {
+        Install-Module -Name powershell-yaml -Force
+        " - Installed powershell-yaml module"
+    }
 }
 
 ""
@@ -76,7 +80,7 @@ $global:do_all_auto = "/auto" -in $args
 $global:do_config = "/config" -in $args
 if ($global:do_all -and $global:do_all_auto) {
     "Error: Can only specify one of /all or /auto"
-    "Do '.\PowerWash.ps1 /?' for help"
+    "Do '.\$global:ScriptName /?' for help"
     exit
 }
 $global:config_map = If (Test-Path ".\PowerWashSettings.yml") {
@@ -114,15 +118,22 @@ if ("/warnconfig" -in $args) {
         }
     }
     if ($global:config_map.Debloat.RemoveEdge) {
-        "* Will remove Microsoft Edge (EXPERIMENTAL)"
+        "* Will remove Microsoft Edge"
         if ($global:config_map.Deblaot.RemoveEdge_ExtraTraces) {
             "  - Will attempt to remove additional traces of Edge"
         }
+    }
+    if ($global:config_map.Debloat.RemoveStore) {
+        "* Will remove Windows Store"
     }
     if ($global:config_map.Debloat.RemovePreinstalled) {
         "* Will remove the following preinstalled apps:"
         foreach ($app in $global:config_map.Debloat.RemovePreinstalledList) {
             "  - $app"
+        }
+        "* Will remove preinstalled apps matching the following name patterns:"
+        foreach ($pat in $global:config_map.Debloat.RemovePreinstalledPatterns) {
+            "  - $pat"
         }
     }
     if ($global:config_map.Debloat.RemoveWindowsCapabilities) {
@@ -174,17 +185,21 @@ $global:feature_verbs = @{
     "Debloat.DisableConsumerFeatures"              = "Disabling Microsoft consumer features";
     "Debloat.DisablePreinstalled"                  = "Disabling preinstalled apps from Microsoft and OEMs";
     "Debloat.RemovePreinstalled"                   = "Removing configured list of preinstalled apps";
+    "Debloat.RemovePreinstalledPatterns"           = "Removing configured list of preinstalled apps based on pattern-matched names";
     "Debloat.RemoveWindowsCapabilities"            = "Removing configured list of Windows capabilities";
     "Debloat.RemovePhantom"                        = "Removing phantom applications";
     "Debloat.RemoveEdge"                           = "Removing Microsoft Edge";
     "Debloat.RemoveEdge_ExtraTraces"               = "Removing extra traces of Microsoft Edge";
+    "Debloat.RemoveStore"                          = "Removing Windows Store";
     "WindowsUpdate.DisableAutoUpdate"              = "Disabling automatic Windows updates";
     "WindowsUpdate.DisableAllUpdate"               = "Disabling Windows Update completely";
     "WindowsUpdate.AddUpdateToggleScriptToDesktop" = "Adding script to desktop to toggle Windows Update on/off";
     "Install.InstallGpEdit"                        = "Installing Group Policy Editor (gpedit.msc)";
+    "Install.InstallHyperV"                        = "Installing Hyper-V";
     "Install.InstallWinget"                        = "Installing Winget package manager";
     "Install.InstallConfigured"                    = "Installing configured list of Winget packages";
     "Defender.ApplyRecommendedSecurityPolicies"    = "Applying recommended security policies";
+    "Defender.ApplyStrictSecurityPolicies"         = "Applying strict security policies";
     "Defender.DefenderScanOnlyWhenIdle"            = "Configuring Defender to scan only when idle";
     "Defender.DefenderScanLowPriority"             = "Configuring Defender to run at low priority";
     "Defender.DisableRealtimeMonitoringCAUTION"    = "Disabling Defender realtime monitoring (requires Tamper Protection disabled)";
@@ -194,11 +209,16 @@ $global:feature_verbs = @{
     "Convenience.ShowRunAsDifferentUser"           = "Showing 'Run as different user' option in start menu";
     "Convenience.ShowHiddenExplorer"               = "Showing hidden files in Explorer";
     "Convenience.CleanupTaskbar"                   = "Cleaning up taskbar";
+    "Convenience.ShowUacOnSameDesktop"             = "Showing UAC on same desktop for elevation requests";
     "Scans.CheckIntegrity"                         = "Running system file integrity checks";
     "Scans.CheckIRQ"                               = "Checking for IRQ conflicts"
 }
 
-$SID = (New-Object System.Security.Principal.NTAccount($env:USERNAME)).Translate([Security.Principal.SecurityIdentifier]).Value
+function Get-SID() {
+    return (New-Object System.Security.Principal.NTAccount($env:USERNAME)).Translate([Security.Principal.SecurityIdentifier]).Value
+}
+
+$SID = Get-SID
 "User SID: $SID"
 
 
@@ -262,6 +282,14 @@ $RK_PowerThrottling = "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottl
 $RK_Services = "HKLM:\SYSTEM\CurrentControlSet\Services"
 
 $RK_TIPC = "HKLM:\SOFTWARE\Microsoft\Input\TIPC"
+
+
+
+$global:DL_VCLibs = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
+$global:DL_UIXaml = "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.7.3"
+$global:DL_UIXaml_PathToAppx = "tools\AppX\x64\Release\Microsoft.UI.Xaml.2.7.appx"
+$global:DL_Winget = "https://github.com/microsoft/winget-cli/releases/download/v1.4.11071/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+$global:DL_Winget_License = "https://github.com/microsoft/winget-cli/releases/download/v1.4.11071/5d9d44b170c146e1a3085c2c75fcc2c1_License1.xml"
 
 
 ### PERFORMANCE STATISTICS ###
@@ -334,19 +362,27 @@ if ("/stats" -in $args) {
 ### COMPATIBILITY CHECKS ###
 # Check Windows edition; some editions don't support certain features
 $edition = (Get-WindowsEdition -online).Edition
-$has_win_pro = ($edition -Like "*Pro*") -or ($edition -Like "*Edu*") -or ($edition -Like "*Enterprise*")
-$has_win_enterprise = ($edition -Like "*Enterprise*") -or ($edition -Like "*Edu*")
+$has_win_pro = ($edition -Like "*Pro*") -or ($edition -Like "*Enterprise*") -or ($edition -Like "*Education*")
+$has_win_enterprise = ($edition -Like "*Enterprise*") -or ($edition -Like "*Education*")
 
 "Windows Edition: $edition (pro=$has_win_pro) (enterprise=$has_win_enterprise)"
 ""
 
 # Check if we have Winget already
-Get-Command winget 2>$null | Out-Null
+$_winget = Get-Command winget -EA SilentlyContinue
 $global:has_winget = $?
-$global:winget_cmd = "winget"
+if ($global:has_winget) {
+    $global:winget_cmd = $_winget.Source
+}
 
 
 ### UTILITY FUNCTIONS ###
+
+function PowerWashText ($Text) {
+    if (-not $global:is_msert) {
+        "$Text"
+    }
+}
 
 function RegistryPut ($Path, $Key, $Value, $VType) {
     if ($null -eq $Path) {
@@ -359,11 +395,15 @@ function RegistryPut ($Path, $Key, $Value, $VType) {
     New-ItemProperty -Path "$Path" -Name "$Key" -Value "$Value" -PropertyType "$VType" -Force | Out-Null
 }
 
+function RegistryGet($Path, $Key) {
+    return (Get-ItemProperty -Path $Path -Name $Key).$Key
+}
+
 function RunScriptAsSystem($Path, $ArgString) {
     Write-Host "  [Invoking task as SYSTEM..." -NoNewline
 
     "$home" | Out-File -FilePath "$env:SystemDrive\.PowerWashHome.tmp" -Force -NoNewline
-    (Get-LocalUser -Name $env:USERNAME).Sid.Value | Out-File -FilePath "$env:SystemDrive\.PowerWashSID.tmp" -Force -NoNewline
+    Get-SID | Out-File -FilePath "$env:SystemDrive\.PowerWashSID.tmp" -Force -NoNewline
 
     # Adapted from https://github.com/mkellerm1n/Invoke-CommandAs/blob/master/Invoke-CommandAs/Private/Invoke-ScheduledTask.ps1
     $Action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "$Path $ArgString"
@@ -397,6 +437,9 @@ function GetNested($Object, $Path) {
 }
 
 function Confirm ($Prompt, $Auto = $false, $ConfigKey = $null) {
+    if ($global:is_msert) {
+        return ($ConfigKey -eq "Debloat.RemoveEdge" -or $ConfigKey -eq "Debloat.RemoveEdge_ExtraTraces")
+    }
     if ($global:do_all) {
         return $true
     }
@@ -418,8 +461,13 @@ function Confirm ($Prompt, $Auto = $false, $ConfigKey = $null) {
 
 function UnpinApp($appname) {
     # https://learn.microsoft.com/en-us/answers/questions/214599/unpin-icons-from-taskbar-in-windows-10-20h2
-	((New-Object -Com Shell.Application).NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}').Items() `
-    | Where-Object { $_.Name -eq $appname }).Verbs() `
+    $AppItems = ((New-Object -Com Shell.Application).NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}').Items() `
+        | Where-Object { $_.Name -eq $appname })
+    if (-not $AppItems) {
+        # That app does not exist or is not pinned to the taskbar
+        return
+    }
+    $AppItems.Verbs() `
     | Where-Object { $_.Name.replace('&', '') -match 'Unpin from taskbar' } `
     | ForEach-Object { $_.DoIt() } 2>$null | Out-Null
 }
@@ -444,6 +492,7 @@ function SysDebugLog {
         if ($global:is_debug) {
             $Msg | Out-File -FilePath $global:sys_account_debug_log -Append -Force
         }
+        "$Msg"
     }
 }
 
@@ -455,19 +504,27 @@ function PSFormatRegPath ($Path, $SID) {
     return $result
 }
 
+
+function DownloadFile($Url, $DestFile) {
+    $ProgressPreference = "SilentlyContinue"
+    Invoke-WebRequest -Uri $Url -UseBasicParsing -OutFile $DestFile
+}
+
 function Install-Winget {
     # https://github.com/microsoft/winget-cli/issues/1861#issuecomment-1435349454
-    Add-AppxPackage -Path "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
+    Add-AppxPackage -Path $global:DL_VCLibs
 
-    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.7.3" -OutFile ".\microsoft.ui.xaml.2.7.3.zip"
-    Expand-Archive ".\microsoft.ui.xaml.2.7.3.zip"
-    Add-AppxPackage ".\microsoft.ui.xaml.2.7.3\tools\AppX\x64\Release\Microsoft.UI.Xaml.2.7.appx"
+    DownloadFile -Url $global:DL_UIXaml -DestFile ".\microsoft.ui.xaml.zip"
+    Expand-Archive ".\microsoft.ui.xaml.zip"
+    Add-AppxPackage ".\microsoft.ui.xaml\$global:DL_UIXaml_PathToAppx"
 
     "- Installing Winget..."
-    Invoke-WebRequest -Uri "https://github.com/microsoft/winget-cli/releases/download/v1.4.11071/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -OutFile ".\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
-    Invoke-WebRequest -Uri "https://github.com/microsoft/winget-cli/releases/download/v1.4.11071/5d9d44b170c146e1a3085c2c75fcc2c1_License1.xml" -OutFile ".\5d9d44b170c146e1a3085c2c75fcc2c1_License1.xml"
+    $winget_msix = Split-Path -Leaf $global:DL_Winget
+    $winget_lic = Split-Path -Leaf $global:DL_Winget_License
+    DownloadFile -Url $global:DL_Winget -DestFile $winget_msix
+    DownloadFile -Url $global:DL_Winget_License -DestFile $winget_lic
 
-    Add-AppxProvisionedPackage -Online -PackagePath ".\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -LicensePath ".\5d9d44b170c146e1a3085c2c75fcc2c1_License1.xml"
+    Add-AppxProvisionedPackage -Online -PackagePath $winget_msix -LicensePath $winget_lic
 
     $global:has_winget = $true
     $global:winget_cmd = "$home\AppData\Local\Microsoft\WindowsApps\winget.exe"
@@ -485,7 +542,7 @@ function Add-Path($Path) {
 if ("/ElevatedAction" -in $args) {
     if ("$(whoami)" -ne "nt authority\system") {
         ""
-        "ERROR: Can only run /ElevatedAction features as SYSTEM."
+        SysDebugLog "ERROR: Can only run /ElevatedAction features as SYSTEM. (Currently running as $(whoami))"
         ""
         exit
     }
@@ -780,24 +837,6 @@ if ("/ElevatedAction" -in $args) {
                 }
             }
         }
-        elseif ("/AppxInboxStage" -in $args) {
-            $appx_db = "$env:SystemDrive\ProgramData\Microsoft\Windows\AppRepository\StateRepository-Machine.srd"
-            if (-not (Test-Path "$env:SystemDrive\.appx.tmp")) {
-                SysDebugLog "Could not update live Appx database: $env:SystemDrive\.appx.tmp is not found"
-            }
-            else {
-                SysDebugLog "write over live appx sqlite database"
-                sc.exe config StateRepository start=disabled | Out-Null
-                Stop-Service -Force StateRepository | SysDebugLog
-                Remove-Item "$($appx_db)-shm"
-                Remove-Item "$($appx_db)-wal"
-                Copy-Item -Force -Path "$env:SystemDrive\.appx.tmp" -Dest $appx_db | SysDebugLog
-                sc.exe config StateRepository start=demand | Out-Null
-                Start-Service StateRepository | SysDebugLog
-                Remove-Item "$env:SystemDrive\.appx.tmp"
-                SysDebugLog "-done"
-            }
-        }
         elseif ("/FilesystemStage" -in $args) {
 
             $folders_to_remove = @(
@@ -877,71 +916,265 @@ if ("/ElevatedAction" -in $args) {
         }
     }
     elseif ("/ApplySecurityPolicy" -in $args) {
-        #Enable-WindowsOptionalFeature -Online -FeatureName Windows-Defender-ApplicationGuard
+        $strict = ("/StrictMode" -in $args) 
+        SysDebugLog "Strict mode: $strict"
 
-        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Network Protection" -Key "EnableNetworkProtection" -Value 1 -VType "DWORD"
-        #RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Controlled Folder Access" -Key "EnableControlledFolderAccess" -Value 1 -VType "DWORD"
-        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR" -Key "ExploitGuard_ASR_Rules" -Value 1 -VType "DWORD"
-        $asr_guids = @(
-            "26190899-1602-49e8-8b27-eb1d0a1ce869",
-            "3b576869-a4ec-4529-8536-b80a7769e899",
-            "56a863a9-875e-4185-98a7-b882c64b5ce5",
-            "5beb7efe-fd9a-4556-801d-275e5ffc04cc",
-            "75668c1f-73b5-4cf0-bb93-3ecf5cb7cc84",
-            "7674ba52-37eb-4a4f-a9a1-f0f9a1619a2c",
-            "92e97fa1-2edf-4476-bdd6-9dd0b4dddc7b",
-            "9e6c4e1f-7d60-472f-ba1a-a39ef669e4b2",
-            "b2b3f03d-6a65-4f7b-a9c7-1c7ef74a9ba4",
-            "be9ba2d9-53ea-4cdc-84e5-9b1eeee46550",
-            "c1db55ab-c21a-4637-bb3f-a12568109d35",
-            "d3e037e1-3eb8-44c8-a917-57927947596d",
-            "e6db77e5-3df2-4cf1-b95a-636979351e5b",
-            "d4f940ab-401b-4efc-aadc-ad5f3c50688a"
-        )
-        $asr_guids | ForEach-Object {
-            RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR\Rules" -Key "$_" -Value 1 -VType "String"
+		
+		###### HARDWARE LEVEL SECURITY SETTINGS ######
+        SysDebugLog "Applying hardware-level security settings..."
+
+		# Firmware protection
+		RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\SystemGuard" -Key "Enabled" -Value 1 -VType "DWORD"
+		
+		# Secure biometrics (Enhanced sign-on security)
+		RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\SecureBiometrics" -Key "Enabled" -Value 1 -VType "DWORD"
+		RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\SecureFingerprint" -Key "Enabled" -Value 1 -VType "DWORD"
+		RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Biometrics\FacialFeatures" -Key "EnhancedAntiSpoofing" -Value 1 -VType "DWORD"
+
+		# Hypervisor enforced code integrity (HVCI)
+		RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" -Key "Enabled" -Value 1 -VType "DWORD"
+		RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" -Key "Locked" -Value 0 -VType "DWORD"
+		RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard" -Key "EnableVirtualizationBasedSecurity" -Value 1 -VType "DWORD"
+		RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard" -Key "RequirePlatformSecurityFeatures" -Value 1 -VType "DWORD"
+		RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard" -Key "Locked" -Value 0 -VType "DWORD"
+
+
+		###### AUTHENTICATION SECURITY SETTINGS ######
+        SysDebugLog "Applying authentication security settings..."
+
+        if ($strict) {
+            # Automatically deny elevation requests from standard users
+            RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Key "ConsentPromptBehaviorUser" -Value 0 -VType "DWORD"
+        }
+        else {
+            # Require standard users to enter a valid admin username/password to allow elevation
+            RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Key "ConsentPromptBehaviorUser" -Value 1 -VType "DWORD"
+        }
+
+        # Admins don't need to enter credentials to allow elevation, but are still prompted to allow or deny.
+        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Key "ConsentPromptBehaviorAdmin" -Value 4 -VType "DWORD"
+
+        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\CredUI" -Key "EnumerateAdministrators" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Key "LocalAccountTokenFilterPolicy" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Key "DisableAutomaticRestartSignOn" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "FilterAdministratorToken" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "EnableInstallerDetection" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "EnableSecureUIAPaths" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "EnableLUA" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "EnableVirtualization" -Value 1 -VType "DWORD"
+
+        if ($strict) {
+            RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Key "PromptOnSecureDesktop" -Value 1 -VType "DWORD"
         }
         
-        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Scan" -Key "DisableRemovableDriveScanning" -Value 0 -VType "DWORD"
-        
-        RegistryPut "HKLM:\Software\Policies\Microsoft\Microsoft Antimalware\NIS\Consumers\IPS" -Key "DisableSignatureRetirement" -Value 0 -VType "DWORD"
+        # Hide usernames from login screen
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "DontDisplayLastUserName" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "DontDisplayLockedUserId" -Value 3 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "DontDisplayUserName" -Value 1 -VType "DWORD"
 
-        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "RestrictAnonymous" -Value 1 -VType "DWORD"
-        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "LmCompatibilityLevel" -Value 5 -VType "DWORD"
-        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "RunAsPPL" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters" -Key "SupportedEncryptionTypes" -Value 2147483640 -VType "DWORD"
         
-        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Ext" -Key "VersionCheckEnabled" -Value 1 -VType "DWORD"
-        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\CredUI" -Key "EnumerateAdministrators" -Value 0 -VType "DWORD"
-        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Key "NoAutorun" -Value 1 -VType "DWORD"
-        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Key "NoDriveTypeAutoRun" -Value 255 -VType "DWORD"
-        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Key "LocalAccountTokenFilterPolicy" -Value 0 -VType "DWORD"
-        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\AppHVSI" -Key "AllowAppHVSI_ProviderSet" -Value 3 -VType "DWORD"
-        
-        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Key "RequireSecuritySignature" -Value 1 -VType "DWORD"
-        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Key "DisableIPSourceRouting" -Value 2 -VType "DWORD"
-        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Key "DisableIPSourceRouting" -Value 2 -VType "DWORD"
-        
-        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service" -Key "AllowBasic" -Value 0 -VType "DWORD"
-        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client" -Key "AllowBasic" -Value 0 -VType "DWORD"
-        
-        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Key "NoAutoplayfornonVolume" -Value 1 -VType "DWORD"
-        
-        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\FVE" -Key "UseAdvancedStartup" -Value 1 -VType "DWORD"
+		# Apply UAC to local accounts logged on via network
+		RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Key "LocalAccountTokenFilterPolicy" -Value 0 -VType "DWORD"
+		
         RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\FVE" -Key "MinimumPIN" -Value 6 -VType "DWORD"
-        
-        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Network Connections" -Key "NC_ShowSharedAccessUI" -Value 0 -VType "DWORD"
-        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Network Connections" -Key "NC_StdDomainUserSetLocation" -Value 1 -VType "DWORD"
-	#RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Network Connections" -Key "NC_AllowNetBridge_NLA" -Value 0 -VType "DWORD"
-        
+		
         RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" -Key "UserAuthentication" -Value 1 -VType "DWORD"
         
         RegistryPut "HKLM:\Software\Policies\Microsoft\Tpm" -Key "StandardUserAuthorizationFailureTotalThreshold" -Value 10 -VType "DWORD"
+		
+		RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "DisableDomainCreds" -Value 1 -VType "DWORD"  # Prevent local storage of domain credentials
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "RestrictAnonymous" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "RestrictAnonymousSAM" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "UseMachineId" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "RestrictRemoteSAM" -Value "O:BAG:BAD:(A;;RC;;;BA)" -VType "String"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "ForceGuest" -Value "Classic - local users authenticate as themselves" -VType "String"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "EveryoneIncludesAnonymous" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "LmCompatibilityLevel" -Value 5 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "RunAsPPL" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "NoLMHash" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Key "LmCompatibilityLevel" -Value 5 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0" -Key "allownullsessionfallback" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0" -Key "NTLMMinClientSec" -Value 537395200 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0" -Key "NTLMMinServerSec" -Value 537395200 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\pku2u" -Key "AllowOnlineID" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\System\CurrentControlSet\Control\Lsa\FIPSAlgorithmPolicy" -Key "Enabled" -Value 1 -VType "DWORD"
+
+        RegistryPut "HKLM:\System\CurrentControlSet\Services\LDAP" -Key "LDAPClientIntegrity" -Value 1 -VType "DWORD"
+
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork" -Key "RequireSecurityDevice" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork\PINComplexity" -Key "MinimumPINLength" -Value 6 -VType "DWORD"
+
+        # Remote Desktop Services
+        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services" -Key "DisablePasswordSaving" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services" -Key "fPromptForPassword" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services" -Key "fEncryptRPCTraffic" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services" -Key "MinEncryptionLevel" -Value 3 -VType "DWORD"
         
-        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" -Key "fAllowToGetHelp" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\System\CurrentControlSet\Services\Netlogon\Parameters" -Key "RequireSignOrSeal" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\System\CurrentControlSet\Services\Netlogon\Parameters" -Key "SealSecureChannel" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\System\CurrentControlSet\Services\Netlogon\Parameters" -Key "SignSecureChannel" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\System\CurrentControlSet\Services\Netlogon\Parameters" -Key "DisablePasswordChange" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\System\CurrentControlSet\Services\Netlogon\Parameters" -Key "RequireStrongKey" -Value 1 -VType "DWORD"
+        if ($strict) {
+            RegistryPut "HKLM:\System\CurrentControlSet\Services\Netlogon\Parameters" -Key "MaximumPasswordAge" -Value 30 -VType "DWORD"
+            RegistryPut "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Key "cachedlogonscount" -Value 1 -VType "DWORD"
+        }
+        else {
+            RegistryPut "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Key "cachedlogonscount" -Value 10 -VType "DWORD"
+        }
+        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Setup\RecoveryConsole" -Key "SecurityLevel" -Value 0 -VType "DWORD"
+
+        
+        ###### SYSTEM SECURITY SETTINGS ######
+        SysDebugLog "Applying system-level process mitigations..."
+        Set-ProcessMitigation -System -Enable DEP, EmulateAtlThunks, BottomUp, HighEntropy, AuditSystemCall, DisableExtensionPoints, CFG, SuppressExports, EnforceModuleDependencySigning, BlockRemoteImageLoads, UserShadowStack
+        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows\Explorer" -Key "NoDataExecutionPrevention" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows\Explorer" -Key "NoHeapTerminationOnCorruption" -Value 0 -VType "DWORD"
+        if ($strict) {
+            Set-ProcessMitigation -System -Enable StrictHandle, StrictCFG, UserShadowStackStrictMode
+            RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\MitigationOptions" -Key "MitigationOptions_FontBocking" -Value "1000000000000" -VType "String"
+        }
+
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" -Key "DODownloadMode" -Value 0 -VType "DWORD"
+
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "InactivityTimeoutSecs" -Value 900 -VType "DWORD"
+        
+        RegistryPut "HKLM:\System\CurrentControlSet\Control\Session Manager\Kernel" -Key "ObCaseInsensitive" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\System\CurrentControlSet\Control\Session Manager" -Key "ProtectionMode" -Value 1 -VType "DWORD"
+
+		###### ATTACK SURFACE REDUCTION ######
+        SysDebugLog "Applying Attack Surface Reduction settings..."
+		RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR" -Key "ExploitGuard_ASR_Rules" -Value 1 -VType "DWORD"
+        # https://learn.microsoft.com/en-us/microsoft-365/security/defender-endpoint/attack-surface-reduction-rules-reference?view=o365-worldwide#asr-rule-to-guid-matrix
+        $asr_guids_block = @(
+            "26190899-1602-49e8-8b27-eb1d0a1ce869", # Block Office communication application from creating child processes
+            "3b576869-a4ec-4529-8536-b80a7769e899", # Block Office applications from creating executable content
+            "56a863a9-875e-4185-98a7-b882c64b5ce5", # Block abuse of exploited vulnerable signed drivers
+            "5beb7efe-fd9a-4556-801d-275e5ffc04cc", # Block execution of potentially obfuscated scripts
+            "75668c1f-73b5-4cf0-bb93-3ecf5cb7cc84", # Block Office applications from injecting code into other processes
+            "7674ba52-37eb-4a4f-a9a1-f0f9a1619a2c", # Block Adobe Reader from creating child processes
+            "92e97fa1-2edf-4476-bdd6-9dd0b4dddc7b", # Block Win32 API calls from Office macros
+            "9e6c4e1f-7d60-472f-ba1a-a39ef669e4b2", # Block credential stealing from the Windows local security authority subsystem (lsass.exe)
+            "b2b3f03d-6a65-4f7b-a9c7-1c7ef74a9ba4", # Block untrusted and unsigned processes that run from USB
+            "be9ba2d9-53ea-4cdc-84e5-9b1eeee46550", # Block executable content from email client and webmail
+            "c1db55ab-c21a-4637-bb3f-a12568109d35", # Use advanced protection against ransomware
+            "d3e037e1-3eb8-44c8-a917-57927947596d", # Block JavaScript or VBScript from launching downloaded executable content
+            "e6db77e5-3df2-4cf1-b95a-636979351e5b"  # Block persistence through WMI event subscription
+		)
+		$asr_guids_warn = @(
+        )
+        if ($strict) {
+            $asr_guids_block += @(
+                "01443614-cd74-433a-b99e-2ecdc07bfc25", # Block executable files from running unless they meet a prevalence, age, or trusted list criterion
+                "d1e49aac-8f56-4280-b9ba-993a6d77406c", # Block process creations originating from PSExec and WMI commands
+                "d4f940ab-401b-4efc-aadc-ad5f3c50688a"  # Block all Office applications from creating child processes
+            )
+        }
+        else {
+            $asr_guids_warn += @(
+                "01443614-cd74-433a-b99e-2ecdc07bfc25", # Block executable files from running unless they meet a prevalence, age, or trusted list criterion
+                "d1e49aac-8f56-4280-b9ba-993a6d77406c", # Block process creations originating from PSExec and WMI commands
+                "d4f940ab-401b-4efc-aadc-ad5f3c50688a"  # Block all Office applications from creating child processes
+            )
+        }
+        $asr_guids_block | ForEach-Object {
+            RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR\Rules" -Key "$_" -Value 1 -VType "String"
+        }
+		$asr_guids_warn | ForEach-Object {
+			RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR\Rules" -Key "$_" -Value 6 -VType "String"
+		}
+		
+		
+		###### DRIVE AND FILESYSTEM SECURITY SETTINGS ######
+        SysDebugLog "Applying drive and filesystem security settings..."
+
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Scan" -Key "DisableRemovableDriveScanning" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Key "NoAutoplayfornonVolume" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Ext" -Key "VersionCheckEnabled" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Key "NoAutorun" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Key "NoDriveTypeAutoRun" -Value 255 -VType "DWORD"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Key "PreXPSP2ShellProtocolBehavior" -Value 0 -VType "DWORD"
+		RegistryPut "HKLM:\Software\Policies\Microsoft\Windows\Windows Search" -Key "AllowIndexingEncryptedStoresOrItems" -Value 0 -VType "DWORD"
+
+		# Typically too annoying relative to likely benefits (try in Audit mode instead?)
+		#RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Controlled Folder Access" -Key "EnableControlledFolderAccess" -Value 1 -VType "DWORD"
+        if ($strict) {
+		    RegistryPut "HKLM:\Software\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Controlled Folder Access" -Key "EnableControlledFolderAccess" -Value 2 -VType "DWORD"
+        }
+		
+		
+		###### APPLICATION SECURITY SETTINGS ######
+        SysDebugLog "Applying application security settings..."
+        
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Key "PUAProtection" -Value 1 -VType "DWORD"  # Block Potentially Unwanted Applications
+		
+        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows\Installer" -Key "AlwaysInstallElevated" -Value 0 -VType "DWORD"  # Omg how is this even a thing
+        RegistryPut "HKLM:\Software\Policies\Microsoft\Windows\Installer" -Key "SafeForScripting" -Value 0 -VType "DWORD"
+
+        if ($strict) {
+            Enable-WindowsOptionalFeature -Online -NoRestart -FeatureName Windows-Defender-ApplicationGuard
+            
+            # Enable Windows Defender Application Guard in Managed Mode
+            RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\AppHVSI" -Key "AllowAppHVSI_ProviderSet" -Value 3 -VType "DWORD"
+        }
+        
+		###### NETWORK SECURITY SETTINGS ######
+        SysDebugLog "Applying network security settings..."
+
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Key "RequireSecuritySignature" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Key "EnableSecuritySignature" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Key "EnablePlainTextPassword" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Key "AutoDisconnect" -Value 15 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Key "RequireSecuritySignature" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Key "EnableSecuritySignature" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Key "EnableForcedLogoff" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Key "SmbServerNameHardeningLevel" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Key "RestrictNullSessAccess" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Key "DisableIPSourceRouting" -Value 2 -VType "DWORD"
+        RegistryPut "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Key "DisableIPSourceRouting" -Value 2 -VType "DWORD"
+		
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Network Protection" -Key "EnableNetworkProtection" -Value 1 -VType "DWORD"
+		
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service" -Key "AllowBasic" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service" -Key "AllowUnencryptedTraffic" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service" -Key "AllowDigest" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service" -Key "DisableRunAs" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client" -Key "AllowBasic" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client" -Key "AllowUnencryptedTraffic" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client" -Key "AllowDigest" -Value 0 -VType "DWORD"
+
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Network Connections" -Key "NC_ShowSharedAccessUI" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Network Connections" -Key "NC_StdDomainUserSetLocation" -Value 1 -VType "DWORD"
+        #RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Network Connections" -Key "NC_AllowNetBridge_NLA" -Value 0 -VType "DWORD"
+		
+		
+		###### BROWSER SECURITY SETTINGS ######
+        SysDebugLog "Applying browser security settings..."
+
         RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer\Download" -Key "RunInvalidSignatures" -Value 0 -VType "DWORD"
-    
+		RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer\Main\FeatureControl" -Key "FEATURE_BLOCK_CROSS_PROTOCOL_FILE_NAVIGATION" -Value 1 -VType "DWORD"
+        
         RegistryPut "HKLM:\SOFTWARE\Policies\Google\Chrome" -Key "BlockThirdPartyCookies" -Value 1 -VType "DWORD"
         RegistryPut "HKLM:\SOFTWARE\Policies\Google\Chrome" -Key "BackgroundModeEnabled" -Value 0 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\BraveSoftware\Brave" -Key "BlockThirdPartyCookies" -Value 1 -VType "DWORD"
+        RegistryPut "HKLM:\SOFTWARE\Policies\BraveSoftware\Brave" -Key "BackgroundModeEnabled" -Value 0 -VType "DWORD"
+		
+        if ($strict) {
+            RegistryPut "HKLM:\Software\Policies\Microsoft\MicrosoftEdge\PhishingFilter" Key "PreventOverride" -Value 1 -VType "DWORD"
+        }
+
+		###### MISCELLANEOUS ######
+        SysDebugLog "Applying additional security settings..."
+
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Microsoft Antimalware\NIS\Consumers\IPS" -Key "DisableSignatureRetirement" -Value 0 -VType "DWORD"
+
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\FVE" -Key "UseAdvancedStartup" -Value 1 -VType "DWORD"
+        
+        RegistryPut "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" -Key "fAllowToGetHelp" -Value 0 -VType "DWORD"
+		
+		
+		SysDebugLog "Security policy version applied: 8/6/2023"
     }
 
     SysDebugLog "ElevatedAction exiting"
@@ -954,9 +1187,9 @@ if ("/ElevatedAction" -in $args) {
 
 
 
-""
-"### PERFORMANCE FEATURES ###"
-""
+PowerWashText ""
+PowerWashText "### PERFORMANCE FEATURES ###"
+PowerWashText ""
 
 
 # Disable HPET (high precision event timer)
@@ -1152,10 +1385,10 @@ if (Confirm "Enable Message-Signaled Interrupts for all devices that support the
 
 
 
-""
-""
-"### TELEMETRY CONFIGURATION ###"
-""
+PowerWashText ""
+PowerWashText ""
+PowerWashText "### TELEMETRY CONFIGURATION ###"
+PowerWashText ""
 
 
 # Disable Microsoft telemetry as much as we can
@@ -1170,6 +1403,7 @@ if (Confirm "Disable Microsoft telemetry?" -Auto $true -ConfigKey "DisableTeleme
     RegistryPut $RK_Privacy -Key "TailoredExperiencesWithDiagnosticDataEnabled" -Value 0 -VType "DWORD"
     RegistryPut $RK_TIPC -Key "Enabled" -Value 0 -VType "DWORD"  # Inking/typing
     RegistryPut $RK_Policy_AppCompat -Key "AITEnable" -Value 0 -VType "DWORD"  # Apps
+    RegistryPut $RK_Policy_AppCompat -Key "DisableInventory" -Value 1 -VType "DWORD"  # Application Compatibility Program Inventory
 	
     "- Disabling known telemetry services..."
     sc.exe config DiagTrack start=disabled | Out-Null
@@ -1193,39 +1427,30 @@ if (Confirm "Disable Microsoft telemetry?" -Auto $true -ConfigKey "DisableTeleme
     TryDisableTask "KernelCeipTask"
     Disable-ScheduledTask -TaskName "CreateObjectTask" -TaskPath "\Microsoft\Windows\CloudExperienceHost" -EA SilentlyContinue | Out-Null
 	
-    Set-MpPreference -DisableNetworkProtectionPerfTelemetry $true | Out-Null
+    try { Set-MpPreference -DisableNetworkProtectionPerfTelemetry $true -EA SilentlyContinue | Out-Null } catch {}
+    
+    Set-ProcessMitigation -System -Disable SEHOPTelemetry
 	
     "- Complete"
 }
 
 
 
-""
-""
-"### BLOATWARE REMOVAL ###"
-""
+PowerWashText ""
+PowerWashText ""
+PowerWashText "### BLOATWARE REMOVAL ###"
+PowerWashText ""
 
 
 if (Confirm "Uninstall Microsoft Edge?" -Auto $false -ConfigKey "Debloat.RemoveEdge") {
     $aggressive = Confirm "--> Remove Microsoft Edge aggressively? (Removes extra traces of Edge from the filesystem and registry)" -Auto $false -ConfigKey "Debloat.RemoveEdge_ExtraTraces"
     $aggressive_flag = $(If ($aggressive) { "/Aggressive" } Else { "" })
 
-    if (-not $has_sqlite) {
-        "- Installing required dependency SQLite3..."
-        Invoke-WebRequest -Uri "https://sqlite.org/2023/sqlite-tools-win32-x86-3420000.zip" -OutFile "$env:SystemDrive\sqlite.zip"
-        Expand-Archive "$env:SystemDrive\sqlite.zip" -DestinationPath "$env:SystemDrive\sqlite"
-        $subdir = (Get-ChildItem "$env:SystemDrive\sqlite")[0].Name
-        $sqlite3_cmd = "$env:SystemDrive\sqlite\$subdir\sqlite3.exe"
-        Add-Path "$env:SystemDrive\sqlite\$subdir"
-        Remove-Item "$env:SystemDrive\sqlite.zip"
-        "- SQLite3 installed"
-    }
-
     "- Stopping Microsoft Edge..."
     taskkill /f /im msedge.exe 2>$null | Out-Null
     taskkill /f /im MicrosoftEdgeUpdate.exe 2>$null | Out-Null
 	
-    "- Marking Edge as removable..."
+    "- Marking Edge as removable in registry..."
     RegistryPut $RK_Uninst_Edge -Key "NoRemove" -Value 0 -VType "DWORD"
     RegistryPut $RK_Uninst_Edge -Key "NoRepair" -Value 0 -VType "DWORD"
 
@@ -1235,20 +1460,26 @@ if (Confirm "Uninstall Microsoft Edge?" -Auto $false -ConfigKey "Debloat.RemoveE
         Remove-AppxProvisionedPackage -PackageName $provisioned -Online -AllUsers 2>$null | Out-Null
     }
 
-    Write-Host "- Marking Edge as removable in Appx database..." -NoNewline
-    $appx_db = "$env:SystemDrive\ProgramData\Microsoft\Windows\AppRepository\StateRepository-Machine.srd"
-    Copy-Item -Path $appx_db -Dest "$env:SystemDrive\.appx.tmp" | Out-Null
-    @"
-    DROP TRIGGER IF EXISTS main.TRG_AFTER_UPDATE_Package_SRJournal;
-    UPDATE Package SET IsInbox=0 WHERE PackageFullName LIKE '%Microsoft%Edge%';
-    CREATE TRIGGER TRG_AFTER_UPDATE_Package_SRJournal AFTER UPDATE ON Package FOR EACH ROW WHEN is_srjournal_enabled()BEGIN UPDATE Sequence SET LastValue=LastValue+1 WHERE Id=2 ;INSERT INTO SRJournal(_Revision, _WorkId, ObjectType, Action, ObjectId, PackageIdentity, WhenOccurred, SequenceId)SELECT 1, workid(), 1, 2, NEW._PackageID, pi._PackageIdentityID, now(), s.LastValue FROM Sequence AS s CROSS JOIN PackageIdentity AS pi WHERE s.Id=2 AND pi.PackageFullName=NEW.PackageFullName;END;
-"@  | & $sqlite3_cmd "$env:SystemDrive\.appx.tmp"
-    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /AppxInboxStage"
+    "- Marking Edge as removable in Appx database..."
+    $EdgePackages = @()
+    Get-AppxPackage -Name "*Microsoft*Edge*" | ForEach-Object {
+        $Pkg = $_
+        $EdgePackages += $Pkg.PackageFullName
+        $RK_AppxStores | ForEach-Object {
+            New-Item -Path "$_\EndOfLife\$SID\$($Pkg.PackageFullName)" -Force | Out-Null
+        }
+    }
 
     "- Removing Edge from Appx database..."
-    Stop-Service -Force StateRepository
-    Start-Service StateRepository
     Get-AppxPackage -Name "*Microsoft*Edge*" | Remove-AppxPackage
+
+    "- Cleaning up Edge entries in Appx database..."
+    $EdgePackages | ForEach-Object {
+        $PkgName = $_
+        $RK_AppxStores | ForEach-Object {
+            Remove-Item -Path "$_\EndOfLife\$SID\$PkgName" -Force | Out-Null
+        }
+    }
 
     if ($aggressive) {
         "- Attempting to remove Edge using setup tool..."
@@ -1270,12 +1501,13 @@ if (Confirm "Uninstall Microsoft Edge?" -Auto $false -ConfigKey "Debloat.RemoveE
 
         # Many folders to remove are protected by SYSTEM
         Write-Host "- Removing Edge from filesystem..." -NoNewline
-        RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /FilesystemStage"
+        RunScriptAsSystem -Path "$PSScriptRoot/$global:ScriptName" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /FilesystemStage"
 
         # Many registry keys to remove are protected by SYSTEM
         Write-Host "- Removing traces of Edge from registry..." -NoNewline
-        RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /RegistryStage"
+        RunScriptAsSystem -Path "$PSScriptRoot/$global:ScriptName" -ArgString "/ElevatedAction /RemoveEdge $aggressive_flag /RegistryStage"
         if (Test-Path "$env:SystemDrive\.PowerWashAmcacheStatus.tmp") {
+            # Removal from Amcache is totally overkill, but it's fun and technically implied by "removing traces from registry"
             $amcache_status = Get-Content "$env:SystemDrive\.PowerWashAmcacheStatus.tmp"
             Remove-Item "$env:SystemDrive\.PowerWashAmcacheStatus.tmp"
             if ($amcache_status -eq "Failure") {
@@ -1301,16 +1533,40 @@ if (Confirm "Uninstall Microsoft Edge?" -Auto $false -ConfigKey "Debloat.RemoveE
 
         "- Disabling Edge in Windows Update..."
         # https://github.com/AveYo/fox/blob/main/Edge_Removal.bat
+        # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-update-policies
         $update_locations = @("HKLM:\SOFTWARE\Microsoft\EdgeUpdate", "HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate")
         $update_locations | ForEach-Object {
             RegistryPut "$_" -Key "DoNotUpdateToEdgeWithChromium" -Value 1 -VType "DWORD"
+            RegistryPut "$_" -Key "UpdaterExperimentationAndConfigurationServiceControl" -Value 0 -VType "DWORD"
+
+            RegistryPut "$_" -Key "UpdatesSuppressedStartHour" -Value 0x0 -VType "DWORD"
+            RegistryPut "$_" -Key "UpdatesSuppressedStartMin" -Value 0x0 -VType "DWORD"
+            RegistryPut "$_" -Key "UpdatesSuppressedDurationMin" -Value 0x5A0 -VType "DWORD"  # 1440 mins, or 24 hours
+
             RegistryPut "$_" -Key "InstallDefault" -Value 0 -VType "DWORD"
-            RegistryPut "$_" -Key "Install{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" -Value 0 -VType "DWORD"
+            RegistryPut "$_" -Key "UpdateDefault" -Value 0 -VType "DWORD"
+	    
+            RegistryPut "$_" -Key "Install{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" -Value 1 -VType "DWORD"
+            RegistryPut "$_" -Key "Install{2CD8A007-E189-409D-A2C8-9AF4EF3C72AA}" -Value 0 -VType "DWORD"
+            RegistryPut "$_" -Key "Install{65C35B14-6C1D-4122-AC46-7148CC9D6497}" -Value 0 -VType "DWORD"
+            RegistryPut "$_" -Key "Install{0D50BFEC-CD6A-4F9A-964C-C7416E3ACB10}" -Value 0 -VType "DWORD"
             RegistryPut "$_" -Key "Install{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}" -Value 0 -VType "DWORD"
+	    
+            RegistryPut "$_" -Key "Update{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" -Value 1 -VType "DWORD"
+            RegistryPut "$_" -Key "Update{2CD8A007-E189-409D-A2C8-9AF4EF3C72AA}" -Value 0 -VType "DWORD"
+            RegistryPut "$_" -Key "Update{65C35B14-6C1D-4122-AC46-7148CC9D6497}" -Value 0 -VType "DWORD"
+            RegistryPut "$_" -Key "Update{0D50BFEC-CD6A-4F9A-964C-C7416E3ACB10}" -Value 0 -VType "DWORD"
+            RegistryPut "$_" -Key "Update{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}" -Value 0 -VType "DWORD"
         }
     }
     
     "- Note: May need to re-run this after Windows 'quality updates'"
+    "- Complete"
+}
+
+if (Confirm "Remove Store?" -Auto $false -ConfigKey "Debloat.RemoveStore") {
+    Get-AppxPackage -Name "Microsoft.StorePurchaseApp" | Remove-AppxPackage
+    Get-AppxPackage -Name "Microsoft.WindowsStore" | Remove-AppxPackage
     "- Complete"
 }
 
@@ -1343,27 +1599,28 @@ if ($has_win_enterprise -and (Confirm "Disable preinstalled apps?" -Auto $true -
 }
 
 if (Confirm "Remove configured list of preinstalled apps?" -Auto $true -ConfigKey "Debloat.RemovePreinstalled") {
+    $Packages = Get-AppxPackage
+    $ProvisionedPackages = Get-AppxProvisionedPackage -Online
     # Adapted from  https://www.kapilarya.com/how-to-uninstall-built-in-apps-in-windows-10
-    ForEach ($App in $global:config_map.Debloat.RemovePreinstalledList) {
-        $Packages = Get-AppxPackage | Where-Object { $_.Name -eq $App }
-        if ($null -eq $Packages) {
-            "- No installed packages found for $App, skipping"
+    $Packages | ForEach-Object {
+        $Package = $_
+        if ($Package.Name -in $global:config_map.Debloat.RemovePreinstalledList) {
+            "- Attempting removal of $($Package.Name) installed package..."
+            Set-NonRemovableAppsPolicy -Online -PackageFamilyName $Package.PackageFamilyName -NonRemovable 0 | Out-Null
+            Remove-AppxPackage -package $Package.PackageFullName 2>$null | Out-Null
         }
-        else {
-            "- Attempting removal of $App installed package..."
-            foreach ($Package in $Packages) {
-                Set-NonRemovableAppsPolicy -Online -PackageFamilyName $Package.PackageFamilyName -NonRemovable 0 | Out-Null
-                Remove-AppxPackage -package $Package.PackageFullName 2>$null | Out-Null
-            }
+    }
+    $ProvisionedPackages | ForEach-Object {
+        $Package = $_
+        if ($Package.DisplayName -in $global:config_map.Debloat.RemovePreinstalledList) {
+            "- Attempting removal of $($Package.displayName) provisioned package..."
+            Remove-AppxProvisionedPackage -online -packagename $Package.PackageName 2>$null | Out-Null
         }
-        $ProvisionedPackage = Get-AppxProvisionedPackage -online | Where-Object { $_.displayName -eq $App }
-        if ($null -eq $ProvisionedPackage) {
-            "- No provisioned package found for $App, skipping"
-        }
-        else {
-            "- Attempting removal of $App provisioned package..."
-            Remove-AppxProvisionedPackage -online -packagename $ProvisionedPackage.PackageName 2>$null | Out-Null
-        }
+    }
+    foreach ($pattern in $global:config_map.Debloat.RemovePreinstalledPatterns) {
+        "- Removing any packages matching '$pattern'..."
+        $Packages | Where-Object { $_.Name -match "$pattern" } | Remove-AppxPackage 2>$null
+        $ProvisionedPackages | Where-Object { $_.DisplayName -match "$pattern" } | Remove-AppxProvisionedPackage -Online 2>$null | Out-Null
     }
     "- Complete"
 }
@@ -1430,68 +1687,10 @@ if (Confirm "Remove phantom applications?" -Auto $true -ConfigKey "Debloat.Remov
 
 
 
-""
-""
-"### INSTALLATION CONFIGURATION ###"
-""
-
-
-# Install Group Policy editor, which isn't installed by default on Home editions
-# Allows easy tweaking of a wide range of settings without needing to edit registry
-if ((-not $has_win_pro) -and (-not $noinstall) -and (Confirm "Install Group Policy editor? (Not installed by default on Home editions)" -Auto $true -ConfigKey "Install.InstallGpEdit")) {
-    "- Installing Group Policy editor..."
-    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientTools-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
-    cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientExtensions-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
-	
-    "- Complete"
-}
-
-if ((-not $has_win_pro) -and (-not $noinstall) -and (Confirm "Install Hyper-V? (Not installed by default on Home editions)" -Auto $false -ConfigKey "Install.InstallHyperV")) {
-    "- Enumerating packages..."
-    $pkgs = Get-ChildItem $env:SystemDrive\Windows\servicing\Packages | Where-Object { $_.Name -like "*Hyper*V*mum" }
-    
-    "- Installing packages..."
-    $i = 1
-    $pkgs | ForEach-Object {
-        $pkg = $_.Name
-        "  - ($i/$($pkgs.Length)) $pkg"
-        DISM.exe /Online /NoRestart /Add-Package:"$env:SystemDrive\Windows\servicing\Packages\$pkg" 2>$null | Out-Null
-        $i++
-    }    
-
-    "- Enabling Hyper-V..."
-    # DISM.exe /Online /NoRestart /Enable-Feature /featurename:Microsoft-Hyper-V -All /LimitAccess /All 2>$null | Out-Null
-    Enable-WindowsOptionalFeature -Online -NoRestart -FeatureName Microsoft-Hyper-V -All | Out-Null
-
-    "- Complete"
-}
-
-if ((-not $global:has_winget) -and (Confirm "Install Winget package manager?" -Auto $false -ConfigKey "Install.InstallWinget")) {
-    "- Installing Winget dependencies..."
-	
-    Install-Winget
-	
-    "- Complete"
-}
-
-if ($global:has_winget) {
-    if (Confirm "Install configured applications?" -Auto $false -ConfigKey "Install.InstallConfigured") {
-        foreach ($params in $global:config_map.Install.InstallConfiguredList) {
-            & $global:winget_cmd "install" "--accept-package-agreements" "--accept-source-agreements" "$params"
-        }
-        "- Complete"
-    }
-}
-else {
-    "Skipping install of configured applications: Winget not installed"
-}
-
-
-
-""
-""
-"### WINDOWS UPDATE CONFIGURATION ###"
-""
+PowerWashText ""
+PowerWashText ""
+PowerWashText "### WINDOWS UPDATE CONFIGURATION ###"
+PowerWashText ""
 
 
 # Disable automatic updates
@@ -1500,6 +1699,7 @@ if ($has_win_pro) {
         RegistryPut $RK_Policy_Update_AU -Key "NoAutoUpdate" -Value 1 -VType "DWORD"
         RegistryPut $RK_Policy_Update_AU -Key "AUOptions" -Value 2 -VType "DWORD"
         RegistryPut $RK_Policy_Update_AU -Key "AllowMUUpdateService" -Value 1 -VType "DWORD"
+        RegistryPut $RK_Policy_Update_AU -Key "EnableFeaturedSoftware" -Value 0 -VType "DWORD"
         RegistryPut $RK_Store_Update -Key "AutoDownload" -Value 5 -VType "DWORD"
         RegistryPut $RK_Policy_Store -Key "AutoDownload" -Value 4 -VType "DWORD"
         RegistryPut $RK_Policy_Store -Key "DisableOSUpgrade" -Value 1 -VType "DWORD"
@@ -1508,8 +1708,9 @@ if ($has_win_pro) {
     }
 }
 else {
-    "Windows Home edition does not support disabling only automatic updates, skipping this feature"
-    "If you want to disable automatic updates on Home, you can try setting your internet connection to Metered. Otherwise, you can disable updates entirely below."
+    PowerWashText "Not applicable: Disable automatic Windows updates"
+    PowerWashText "* Windows Home edition does not support disabling only automatic updates, skipping this feature"
+    PowerWashText "* If you want to disable automatic updates on Home, you can try setting your internet connection to Metered. Otherwise, you can disable updates entirely below."
 }
 
 # Disable all updates
@@ -1530,7 +1731,7 @@ if (Confirm "Disable all Windows updates? (You will need to manually re-enable t
 # This is the next best thing for Home users to being able to disable automatic updates. They can toggle updates on when they want to check or install updates, and toggle updates back off when they're done.
 if ((-not (Test-Path "$home\Documents\.ToggleUpdates.bat")) -or (-not (Test-Path "$home\Desktop\Toggle Updates.lnk"))) {
     if (Confirm "Add a script to your desktop that lets you toggle Windows updates on or off?" -Auto $false -ConfigKey "WindowsUpdate.AddUpdateToggleScriptToDesktop") {
-        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/UniverseCraft/WindowsPowerWash/main/extra/ToggleUpdates.bat" -OutFile $home\Documents\.ToggleUpdates.bat
+        DownloadFile -Url "https://raw.githubusercontent.com/PublicSatanicVoid/WindowsPowerWash/main/extra/ToggleUpdates.bat" -DestFile "$home\Documents\.ToggleUpdates.bat"
         
         CreateShortcut -Dest "$home\Desktop\Toggle Updates.lnk" -Source "$home\Documents\.ToggleUpdates.bat" -Admin $true
         
@@ -1538,22 +1739,35 @@ if ((-not (Test-Path "$home\Documents\.ToggleUpdates.bat")) -or (-not (Test-Path
     }
 }
 else {
-    "Windows Update toggle script already exists, skipping this feature"
+    PowerWashText "Not applicable: Add Windows Update toggle script to Desktop (Already added)"
 }
 
 
 
 
-""
-""
-"### WINDOWS DEFENDER CONFIGURATION ###"
-""
+PowerWashText ""
+PowerWashText ""
+PowerWashText "### WINDOWS DEFENDER CONFIGURATION ###"
+PowerWashText ""
 
 
-if (Confirm "Apply high-security Defender policies? (Attack Surface Reduction, etc.)" -Auto $false -ConfigKey "Defender.ApplyRecommendedSecurityPolicies") {
+if (Confirm "Apply high-security system settings? (Attack Surface Reduction, etc.)" -Auto $false -ConfigKey "Defender.ApplyRecommendedSecurityPolicies") {
+    $apply_strict_policies = Confirm "--> Apply strict security settings?" -Auto $false -ConfigKey "Defender.ApplyStrictSecurityPolicies"
     Write-Host "- Applying policies..." -Nonewline
-    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /ApplySecurityPolicy"
+    RunScriptAsSystem -Path "$PSScriptRoot/$global:ScriptName" -ArgString "/ElevatedAction /ApplySecurityPolicy $(If ($apply_strict_policies) { '/StrictMode'} Else {''})"
     "- Complete"
+}
+
+$legal_notice_text = RegistryGet "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "legalnoticetext"
+if ($legal_notice_text -eq "") {
+    if (Confirm "Add a warning screen prior to sign-in to deter unauthorized access?" -Auto $false -ConfigKey "Defender.AddWarningScreen") {
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "legalnoticecaption" -Value "Secure System" -VType "String"
+        RegistryPut "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Key "legalnoticetext" -Value "This is a secure system equipped with hardware- and software-level intrusion detection and prevention. It is a violation of 18 U.S.C. 1030 to attempt to access this system without authorization. Attempts to access this system without authorization will be prosecuted to the fullest extent of the law. Notwithstanding applicable law, this system may not be accessed by anyone other than the person(s) to whom it was issued." -VType "String"
+        "- Complete"
+    }
+}
+else {
+    "Not applicable: Add a warning screen prior to sign-in (Warning text already exists. Since this is typically used for legal notices, it should not be overwritten.)"
 }
 
 if (Confirm "Configure Windows Defender to run scans only when computer is idle?" -Auto $true -ConfigKey "Defender.DefenderScanOnlyWhenIdle") {
@@ -1587,17 +1801,17 @@ if (Confirm "Run Defender tasks at a lower priority?" -Auto $true -ConfigKey "De
 
 if (Confirm "Disable real-time protection from Windows Defender? (CAUTION) (EXPERIMENTAL)" -Auto $false -ConfigKey "Defender.DisableRealtimeMonitoringCAUTION") {
     $disable_all_defender = Confirm "--> Disable Windows Defender entirely? (CAUTION) (EXPERIMENTAL)" -Auto $false -ConfigKey "Defender.DisableAllDefenderCAUTIONCAUTION"
-    RunScriptAsSystem -Path "$PSScriptRoot/PowerWash.ps1" -ArgString "/ElevatedAction /DisableRealtimeMonitoring $(If ($disable_all_defender) {'/DisableAllDefender'} Else {''})"
+    RunScriptAsSystem -Path "$PSScriptRoot/$global:ScriptName" -ArgString "/ElevatedAction /DisableRealtimeMonitoring $(If ($disable_all_defender) {'/DisableAllDefender'} Else {''})"
 	
     "- Complete (requires Tamper Protection disabled to take effect)"
 }
 
 
 
-""
-""
-"### CONVENIENCE SETTINGS ###"
-""
+PowerWashText ""
+PowerWashText ""
+PowerWashText "### CONVENIENCE SETTINGS ###"
+PowerWashText ""
 
 
 if (Confirm "Disable app startup delay?" -Auto $true -ConfigKey "Convenience.DisableStartupDelay") {
@@ -1663,12 +1877,112 @@ if ($searchbox_mode -ne "NoChange") {
     "- Complete"
 }
 
+# Show UAC Prompt on Same Desktop
+if (Confirm "Show UAC prompt on same desktop?" -Auto $true -ConfigKey "Convenience.ShowUacPromptOnSameDesktop") {
+    RegistryPut "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Key "PromptOnSecureDesktop" -Value 0 -VType "DWORD"
+    "- Complete"
+}
 
 
-""
-""
-"### SCANS AND AUTOMATIC REPAIRS ###"
-""
+
+PowerWashText ""
+PowerWashText ""
+PowerWashText "### INSTALLATION CONFIGURATION ###"
+PowerWashText ""
+
+
+# Install Group Policy editor, which isn't installed by default on Home editions
+# Allows easy tweaking of a wide range of settings without needing to edit registry
+if (-not $has_win_pro) {
+    if ( (-not $noinstall) -and (Confirm "Install Group Policy editor? (Not installed by default on Home editions)" -Auto $true -ConfigKey "Install.InstallGpEdit")) {
+        "- Installing Group Policy editor..."
+        cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientTools-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
+        cmd /c 'FOR %F IN ("%SystemRoot%\servicing\Packages\Microsoft-Windows-GroupPolicy-ClientExtensions-Package~*.mum") DO (DISM /Online /NoRestart /Add-Package:"%F")' | Out-Null
+        
+        "- Complete"
+    }
+}
+else {
+    PowerWashText "Not applicable: Install Group Policy editor (Already installed by default on non-Home editions)"
+}
+
+if ((Get-WindowsOptionalFeature -FeatureName Microsoft-Hyper-V -Online).State -ne "Enabled") {
+    if (-not $has_win_pro) {
+        if ((-not $noinstall) -and (Confirm "Install Hyper-V? (Not installed by default on Home editions)" -Auto $false -ConfigKey "Install.InstallHyperV")) {
+            "- Enumerating packages..."
+            $pkgs = Get-ChildItem $env:SystemDrive\Windows\servicing\Packages | Where-Object { $_.Name -like "*Hyper*V*mum" }
+            
+            "- Installing packages..."
+            $i = 1
+            $pkgs | ForEach-Object {
+                $pkg = $_.Name
+                "  - ($i/$($pkgs.Length)) $pkg"
+                DISM.exe /Online /NoRestart /Add-Package:"$env:SystemDrive\Windows\servicing\Packages\$pkg" 2>$null | Out-Null
+                $i++
+            }    
+
+            "- Enabling Hyper-V..."
+            Enable-WindowsOptionalFeature -Online -NoRestart -FeatureName Microsoft-Hyper-V -All | Out-Null
+
+            "- Complete"
+        }
+    }
+    else {
+        if (Confirm "Enable Hyper-V?" -Auto $false -ConfigKey "Install.InstallHyperV") {
+            Enable-WindowsOptionalFeature -Online -NoRestart -FeatureName Microsoft-Hyper-V -All | Out-Null
+            "-Complete"
+        }
+    }
+}
+else {
+    "Not applicable: Install/Enable Hyper-V (Already enabled on this computer)"
+}
+
+if (-not $global:has_winget) {
+    if ((Confirm "Install Winget package manager?" -Auto $false -ConfigKey "Install.InstallWinget")) {
+        "- Installing Winget dependencies..."
+        
+        Install-Winget
+        Start-Sleep -Seconds 1;
+
+        "- Winget installed, waiting up to 10s for path to show up"
+        $retry = 0
+        while ($retry -lt 10 -and -not (Test-Path $global:winget_cmd)) {
+            $retry += 1;
+            Start-Sleep -Seconds 1;
+        }
+        if (Test-Path $global:winget_cmd) {
+            "  (Winget path shows up)"
+        }
+        else {
+            "  (Timed out - warning, Winget may not be installed correctly)"
+        }
+        
+        "- Complete"
+    }
+}
+else {
+    "Not applicable: Install Winget package manager (Already installed on this computer)"
+}
+
+if ($global:has_winget) {
+    if (Confirm "Install configured applications?" -Auto $false -ConfigKey "Install.InstallConfigured") {
+        foreach ($params in $global:config_map.Install.InstallConfiguredList) {
+            & $global:winget_cmd "install" "--accept-package-agreements" "--accept-source-agreements" "$params"
+        }
+        "- Complete"
+    }
+}
+else {
+    PowerWashText "Skipping install of configured applications: Winget not installed"
+}
+
+
+
+PowerWashText ""
+PowerWashText ""
+PowerWashText "### SCANS AND AUTOMATIC REPAIRS ###"
+PowerWashText ""
 
 
 # Check system file integrity
@@ -1709,9 +2023,9 @@ if ((-not $global:do_config) -or ($global:config_map.Scans.WarnAV)) {
 
 
 
+PowerWashText ""
 ""
-""
-"### POWERWASH COMPLETE ###"
+PowerWashText "### POWERWASH COMPLETE ###"
 "A restart is recommended"
 ""
 

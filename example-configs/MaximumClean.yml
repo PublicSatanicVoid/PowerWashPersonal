@@ -29,6 +29,10 @@ Performance:
   # Disables settings on network adapters that add latency, such as packet coalescing.
   NetworkResponsiveness: true
 
+  # Sets visual effects settings to maximum performance, e.g. disables many Windows animations.
+  # Does not disable font smoothing.
+  AdjustVisualEffects: true
+
   # Enables Windows' "Ultimate" performance plan, with additional tweaks for low latency
   # and rapid ramp-up in response to increased system load. Disables power throttling.
   PowerSettingsMaxPerformance: true
@@ -76,25 +80,58 @@ Debloat:
     - Microsoft.Advertising.Xaml
     - Microsoft.BingNews
     - Microsoft.BingWeather
+    - Microsoft.GetHelp
+    - Microsoft.GetStarted
     - Microsoft.Messaging
     - Microsoft.MicrosoftSolitaireCollection
     - Microsoft.MicrosoftOfficeHub
+    - Microsoft.NetworkSpeedTest
+    - Microsoft.News
+    - Microsoft.Office.Lens
+    - Microsoft.Office.OneNote
+    - Microsoft.Office.Sway
+    - Microsoft.Office.Todo.List
     - Microsoft.OneConnect
     - Microsoft.People
+    #- Microsoft.RemoteDesktop
+    #- Microsoft.StorePurchaseApp
     - Microsoft.SkypeApp
     - Microsoft.Wallet
+    - Microsoft.Whiteboard
+    #- Microsoft.MicrosoftStickyNotes
+    #- Microsoft.Windows.Photos
+    - Microsoft.WindowsAlarms
+    #- Microsoft.WindowsCalculator
+    #- Microsoft.WindowsCamera
     - Microsoft.WindowsCommunicationsApps
     - Microsoft.WindowsFeedbackHub
+    - Microsoft.WindowsMaps
     - Microsoft.WindowsSoundRecorder
+    - Microsoft.Xbox.TCUI
     - Microsoft.XboxApp
+    - Microsoft.XboxGameOverlay
+    - Microsoft.XboxIdentityProvider
+    - Microsoft.XboxSpeechToTextOverlay
     - Microsoft.YourPhone
+    #- Microsoft.ZuneMusic
+    #- Microsoft.ZuneVideo
     - MicrosoftTeams
     - RivetNetworks.KillerControlCenter
     - SpotifyAB.SpotifyMusic
     # Cannot remove Edge this way. See "RemoveEdge" config value below instead.
 
+  # Mildly faster to batch these.
+  RemovePreinstalledPatterns:
+    - "EclipseManager|ActiproSoftwareLLC|AdobeSystemsIncorporated.AdobePhotoshopExpress|Wunderlist|Flipboard"
+    - "Duolingo-LearnLanguagesforFree|Sway|Speed Test"
+    - "PandoraMediaInc|Twitter|Facebook|Spotify|Dolby"
+    - "CandyCrush|BubbleWitch3Saga|Minecraft|Royal Revolt"
+
   # Will remove the below list of Windows capabilities/features
   RemoveWindowsCapabilities: true
+
+  # NOTE: Make sure not to remove Browser.InternetExplorer capability and Edge browser below
+  # if running on a fresh install, or you will have no web browser!
   RemoveWindowsCapabilitiesList:
     - OneCoreUAP.OneSync
     - Microsoft.Windows.WordPad
@@ -104,14 +141,17 @@ Debloat:
   # do not actually exist.
   RemovePhantom: true
 
-  # WARNING: EXPERIMENTAL
-  # Removes Microsoft Edge. Currently, some traces will remain, but the program itself will
-  # at least be gone.
-  RemoveEdge: true # EXPERIMENTAL
+  # Removes Microsoft Edge. Some traces may remain.
+  # NOTE: Make sure not to remove Edge and the Browser.InternetExplorer capability above if
+  # running on a fresh install, or you will have no web browser!
+  RemoveEdge: true
 
   # Attempts to remove additional traces of Edge. May or may not be necessary to keep it from
   # reinstalling or showing up in e.g. package caches.
-  RemoveEdge_ExtraTraces: true # EXPERIMENTAL
+  RemoveEdge_ExtraTraces: true
+
+  # Removes Windows Store.
+  RemoveStore: true
 
 # Settings pertaining to Windows Update
 WindowsUpdate:
@@ -128,45 +168,18 @@ WindowsUpdate:
   # except when they specifically want to update.
   AddUpdateToggleScriptToDesktop: true
 
-# Optional utilities and commonly loaded programs to install.
-Install:
-  # HOME EDITION ONLY
-  # Installs Group Policy Editor (gpedit.msc). On non-Home editions, this is available by
-  # default. On Home editions, once installed here, it won't show up in Windows search, but
-  # is accessible via Win+R, "gpedit.msc"
-  InstallGpEdit: true
-
-  # HOME EDITION ONLY
-  # Installs Hyper-V. On non-Home editions, this is available by default.
-  # Can take a bit of time to install all the required packages.
-  InstallHyperV: false
-
-  # Installs Winget package manager. Convenient way to install a wide range of software
-  # from the command line, with no user interaction needed.
-  InstallWinget: true
-
-  # Installs below list of Winget packages
-  # Requires Winget to be installed.
-  InstallConfigured: false
-  InstallConfiguredList:
-    - 7zip.7zip
-    - Google.Chrome
-    #- Notepad++.Notepad++
-    #- Microsoft.WindowsTerminal
-    #- Gyan.FFmpeg
-    #- Git.Git
-    #- Microsoft.PowerToys
-    #- Microsoft.Sysinternals.ProcessMonitor
-    #- Microsoft.VisualStudioCode
-    #- Discord.Discord
-    #- Valve.Steam
-
 # Settings related to Windows Defender.
 Defender:
   # Configures Defender and related software for high security.
   # Some of these features require Enterprise and/or Microsoft Defender 365, e.g. Microsoft Defender for Business.
   # Policies applied include Attack Surface Reduction, exploit mitigation, and browser security.
   ApplyRecommendedSecurityPolicies: false
+  
+  # Applies additional, stricter security policies. May have a larger impact on performance or convenience.
+  ApplyStrictSecurityPolicies: false
+
+  # Adds a warning screen prior to login to deter unauthorized access.
+  AddWarningScreen: false
 
   # Tells Defender to only run scans when the computer is idle.
   DefenderScanOnlyWhenIdle: true
@@ -210,6 +223,43 @@ Convenience:
   # - "Icon": Shows just the search icon
   # - "Hidden": Hides the search box and icon
   TaskbarSearchboxMode: Hidden
+
+  # Sows the UAC prompt for elevation requests, but on the same desktop
+  # (less disruptive).
+  ShowUacOnSameDesktop: true
+
+# Optional utilities and commonly loaded programs to install.
+Install:
+  # HOME EDITION ONLY
+  # Installs Group Policy Editor (gpedit.msc). On non-Home editions, this is available by
+  # default. On Home editions, once installed here, it won't show up in Windows search, but
+  # is accessible via Win+R, "gpedit.msc"
+  InstallGpEdit: true
+
+  # HOME EDITION ONLY
+  # Installs Hyper-V. On non-Home editions, this is available by default.
+  # Can take a bit of time to install all the required packages.
+  InstallHyperV: false
+
+  # Installs Winget package manager. Convenient way to install a wide range of software
+  # from the command line, with no user interaction needed.
+  InstallWinget: true
+
+  # Installs below list of Winget packages
+  # Requires Winget to be installed.
+  InstallConfigured: false
+  InstallConfiguredList:
+    - 7zip.7zip
+    - Google.Chrome
+    #- Notepad++.Notepad++
+    #- Microsoft.WindowsTerminal
+    #- Gyan.FFmpeg
+    #- Git.Git
+    #- Microsoft.PowerToys
+    #- Microsoft.Sysinternals.ProcessMonitor
+    #- Microsoft.VisualStudioCode
+    #- Discord.Discord
+    #- Valve.Steam
 
 # Settings for scans to perform.
 Scans:
